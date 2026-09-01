@@ -1,0 +1,51 @@
+operation:
+  id: lz4
+  name: LZ4 Block Compression
+  version: "1.0"
+  category: compression
+  description: 임의 파일을 독립적인 LZ4 블록으로 압축합니다.
+
+input:
+  representation: raw_bytes
+  formats: ["*"]
+  min_bytes: 0
+
+output:
+  representation: binary
+  format: isc_lz4_blocks
+  variable_size: true
+
+parameters:
+  block_size:
+    type: integer
+    description: 한 번의 커널 호출에서 처리할 바이트 수
+    default: 65536
+    minimum: 1024
+    maximum: 65536
+
+runtime:
+  backend: xrt
+
+kernel:
+  name: lz4_compress
+  source: kernel/lz4_kernel.cpp
+  include_dirs:
+    - ${VITIS_LIBRARIES}/data_compression/L1/include/hw
+  arguments:
+    - {name: in, kind: buffer, direction: in}
+    - {name: out, kind: buffer, direction: out}
+    - {name: input_size, kind: scalar, direction: in}
+    - {name: output_size, kind: buffer, direction: out}
+    - {name: literal_overflow, kind: buffer, direction: out}
+  memory:
+    - {port: m_axi_gmem0, bank: 0}
+    - {port: m_axi_gmem1, bank: 1}
+
+build:
+  platform: xilinx_u50_gen3x16_xdma_5_202210_1
+  memory_type: HBM
+  targets: [hw_emu, hw]
+
+validation:
+  mode: cross_target
+  reference_target: hw_emu

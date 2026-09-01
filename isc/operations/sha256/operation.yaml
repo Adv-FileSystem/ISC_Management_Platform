@@ -1,0 +1,43 @@
+operation:
+  id: sha256
+  name: SHA-256 Digest
+  version: "1.0"
+  category: security
+  description: 임의 파일의 SHA-256 다이제스트를 계산합니다.
+
+input:
+  representation: raw_bytes
+  formats: ["*"]
+  min_bytes: 0
+
+output:
+  representation: binary
+  format: sha256_digest
+  fixed_bytes: 32
+
+parameters: {}
+
+runtime:
+  backend: xrt
+
+kernel:
+  name: isc_sha256
+  source: kernel/sha256_kernel.cpp
+  include_dirs:
+    - ${VITIS_LIBRARIES}/security/L1/include
+  arguments:
+    - {name: in, kind: buffer, direction: in}
+    - {name: digest, kind: buffer, direction: out}
+    - {name: input_size, kind: scalar, direction: in}
+  memory:
+    - {port: m_axi_gmem0, bank: 0}
+    - {port: m_axi_gmem1, bank: 1}
+
+build:
+  platform: xilinx_u50_gen3x16_xdma_5_202210_1
+  memory_type: HBM
+  targets: [hw_emu, hw]
+
+validation:
+  mode: cross_target
+  reference_target: hw_emu

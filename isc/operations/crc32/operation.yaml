@@ -1,0 +1,45 @@
+operation:
+  id: crc32
+  name: CRC-32 Checksum
+  version: "1.0"
+  category: checksum
+  description: 임의 파일의 표준 CRC-32 체크섬을 계산합니다.
+
+input:
+  representation: raw_bytes
+  formats: ["*"]
+  min_bytes: 1
+  max_bytes: 4294967295
+
+output:
+  representation: binary
+  format: crc32_be
+  fixed_bytes: 4
+
+parameters: {}
+
+runtime:
+  backend: xrt
+
+kernel:
+  name: isc_crc32
+  source: kernel/crc32_kernel.cpp
+  include_dirs:
+    - ${VITIS_LIBRARIES}/data_compression/L1/include/hw
+    - ${VITIS_LIBRARIES}/security/L1/include
+  arguments:
+    - {name: in, kind: buffer, direction: in}
+    - {name: checksum, kind: buffer, direction: inout}
+    - {name: input_size, kind: scalar, direction: in}
+  memory:
+    - {port: m_axi_gmem0, bank: 0}
+    - {port: m_axi_gmem1, bank: 1}
+
+build:
+  platform: xilinx_u50_gen3x16_xdma_5_202210_1
+  memory_type: HBM
+  targets: [hw_emu, hw]
+
+validation:
+  mode: cross_target
+  reference_target: hw_emu

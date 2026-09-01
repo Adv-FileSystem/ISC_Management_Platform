@@ -1,0 +1,11 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+artifacts/
+datasets/sample.bin
+modules/compressor/
+_x/
+.Xil/
+*.log
+!tests/**/*.log
