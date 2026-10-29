@@ -1,0 +1,72 @@
+operation:
+  id: vector_topk
+  name: Vector Top-K (inner product)
+  version: "1.0"
+  category: retrieval
+  description: >-
+    질의 벡터 하나와 행렬의 정수 내적이 큰 상위 k개 (id, score) 를 찾습니다.
+    RAG 의 검색 단계에 해당하는 검증용 연산이며 합성 임베딩으로 시험합니다.
+
+input:
+  representation: binary
+  # u32 rows, u32 dim (1..2048), i8 query[dim], i8 db[rows][dim]  (리틀 엔디안, 행 우선)
+  format: isc_vectors_i8
+  min_bytes: 9
+
+output:
+  representation: binary
+  # k 개의 (u32 id, i32 score): 점수 내림차순, 같으면 id 오름차순. 남는 칸은 id 0xFFFFFFFF.
+  format: isc_topk_pairs
+  variable_size: false
+
+parameters:
+  k:
+    type: integer
+    # 호스트가 커널에 넘기는 값이고 커널 상수 KMAX(16)가 상한이다. 장치 바이너리는 같다.
+    scope: host
+    description: 돌려줄 개수
+    default: 10
+    minimum: 1
+    maximum: 16
+  chunk_bytes:
+    type: integer
+    scope: host
+    description: 한 번의 커널 호출이 처리할 데이터베이스 바이트
+    default: 16777216
+    minimum: 4096
+    maximum: 134217728
+
+baseline:
+  # 정수 내적과 전순서라서 장치 출력과 바이트까지 같아야 한다.
+  equivalence: exact
+  description: numpy int32 내적 + lexsort
+  requires: numpy
+
+runtime:
+  backend: xrt
+
+kernel:
+  name: isc_vector_topk
+  source: kernel/vector_topk_kernel.cpp
+  include_dirs: []
+  arguments:
+    - {name: query, kind: buffer, direction: in}
+    - {name: db, kind: buffer, direction: in}
+    - {name: out, kind: buffer, direction: out}
+    - {name: rows, kind: scalar, direction: in}
+    - {name: dim, kind: scalar, direction: in}
+    - {name: k, kind: scalar, direction: in}
+    - {name: id_base, kind: scalar, direction: in}
+  memory:
+    - {port: m_axi_gmem0, bank: 0}
+    - {port: m_axi_gmem1, bank: 1}
+    - {port: m_axi_gmem2, bank: 2}
+
+build:
+  platform: xilinx_u50_gen3x16_xdma_5_202210_1
+  memory_type: HBM
+  targets: [hw_emu, hw]
+
+validation:
+  mode: cross_target
+  reference_target: hw_emu

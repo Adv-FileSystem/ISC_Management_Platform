@@ -1,0 +1,34 @@
+// 플랫폼이 생성하는 래퍼 커널 (프로파일 filter). 사용자는 isc_user_logic.hpp 의 isc_filter()
+// 만 쓴다. 이 파일은 빌드마다 템플릿에서 만들어지고 artifacts/cache/<지문>/ 에 남는다.
+#include <ap_int.h>
+#include <stdint.h>
+
+#include "isc_user_logic.hpp"
+
+extern "C" {
+
+void isc_filter_kernel(const ${IN_T}* input, ${IN_T}* output, uint32_t row_count,
+                       uint32_t* output_count) {
+#pragma HLS INTERFACE m_axi port = input offset = slave bundle = gmem0
+#pragma HLS INTERFACE m_axi port = output offset = slave bundle = gmem1
+#pragma HLS INTERFACE m_axi port = output_count offset = slave bundle = gmem1
+#pragma HLS INTERFACE s_axilite port = input bundle = control
+#pragma HLS INTERFACE s_axilite port = output bundle = control
+#pragma HLS INTERFACE s_axilite port = row_count bundle = control
+#pragma HLS INTERFACE s_axilite port = output_count bundle = control
+#pragma HLS INTERFACE s_axilite port = return bundle = control
+
+    uint32_t produced = 0;
+
+filter_rows:
+    for (uint32_t row = 0; row < row_count; ++row) {
+#pragma HLS PIPELINE II = 1
+        ${IN_T} value = input[row];
+        if (isc_filter(value)) {
+            output[produced++] = value;
+        }
+    }
+    output_count[0] = produced;
+}
+
+}

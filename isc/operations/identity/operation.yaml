@@ -1,0 +1,47 @@
+operation:
+  id: identity
+  name: Identity
+  version: "1.0"
+  category: utility
+  description: 입력 파일의 원시 바이트를 변경 없이 출력합니다.
+
+input:
+  representation: raw_bytes
+  formats: ["*"]
+  min_bytes: 0
+
+output:
+  representation: raw_bytes
+  format: same_as_input
+  variable_size: true
+
+parameters: {}
+
+baseline:
+  equivalence: exact
+  description: bytes(data) 복사
+
+runtime:
+  backend: xrt
+
+kernel:
+  name: isc_identity
+  source: kernel/identity.cpp
+  include_dirs: []
+  arguments:
+    - {name: in, kind: buffer, direction: in}
+    - {name: out, kind: buffer, direction: out}
+    - {name: input_size, kind: scalar, direction: in}
+    - {name: output_size, kind: buffer, direction: out}
+  memory:
+    - {port: m_axi_gmem0, bank: 0}
+    - {port: m_axi_gmem1, bank: 1}
+
+build:
+  platform: xilinx_u50_gen3x16_xdma_5_202210_1
+  memory_type: HBM
+  targets: [hw_emu, hw]
+
+validation:
+  mode: cross_target
+  reference_target: hw_emu
