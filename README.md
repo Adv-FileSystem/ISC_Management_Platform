@@ -23,6 +23,24 @@ ISC가 제공하는 FPGA 연산으로 모듈을 만들고 **검사 → 빌드 �
 - 사용자가 수정하는 파일은 `module.yaml`과 `logic.hpp`뿐입니다. 커널, 호스트 어댑터, 빌드 설정은 플랫폼이 관리합니다.
 - [**사용자 유의사항**](#6-사용자-유의사항)을 꼭 확인하시기 바랍니다.
 
+### 지원 범위
+
+현재 기준입니다. 최신 정보는 `isc devices`, `isc operations`, `isc describe [연산 이름]`으로 확인합니다.
+`hw`/`hw_emu`, `ap_int.h`, HLS pragma 등은 현재 백엔드(AMD Vitis/XRT)의 용어입니다.
+
+| 지원 장치 | 백엔드 | 개발 플랫폼 | 빌드 타깃 |
+|---|---|---|---|
+| AMD Alveo U50 | XRT 2023.1 / Vitis 2025.1 | `xilinx_u50_gen3x16_xdma_5_202210_1` (HBM) | `hw_emu`, `hw` |
+
+| 지원 연산 | 종류 | 기능 | `VITIS_LIBRARIES` |
+|---|---|---|---|
+| `adler32` / `crc32` | 내장 | 체크섬 | 필요 |
+| `sha256` | 내장 | 해시 | 필요 |
+| `identity` | 내장 | 복사 | 불필요 |
+| `lz4` | 내장 | 블록 압축 | 필요 |
+| `vector_topk` | 내장 | 정수 내적 상위 k | 불필요 |
+| `filter` / `map` / `aggregate` | Hook | 조건 필터 / 변환 / 조건부 집계 | 불필요 |
+
 **목차**: [1. 설치](#1-설치-및-환경-구성) · [2. 모듈 생성](#2-모듈-생성-스켈레톤) ·
 [3. 로직 작성](#3-로직-작성-hook-템플릿) · [4. 빌드·실행·검증](#4-빌드실행검증) ·
 [5. 가속 효과 검증](#5-가속-효과-검증) · [6. 유의사항](#6-사용자-유의사항) · [7. 명령어](#7-명령어-참고)
@@ -34,7 +52,7 @@ git clone https://github.com/Adv-FileSystem/ISC_Management_Platform.git
 cd ISC_Management_Platform
 python3 -m pip install -e .        # 설치 없이 쓰려면 isc 대신 python3 -m isc
 source /opt/xilinx/xrt/setup.sh
-export VITIS_LIBRARIES=[Vitis Libraries 2025.1 경로]   # adler32, crc32, lz4, sha256 빌드에 필요
+export VITIS_LIBRARIES=[Vitis Libraries 2025.1 경로]   # 지원 연산 표에서 '필요'인 연산 빌드에 필요
 isc doctor                         # 환경과 FPGA 카드 확인
 ```
 
@@ -78,7 +96,7 @@ module:
   version: "0.1.0"       # 수정 가능
 operation:
   id: [연산 이름]        # 변경 금지
-  version: "1.0"         # 변경 금지
+  version: [연산 버전]   # 변경 금지 (생성 시 자동 기입)
 parameters:              # 수정 가능 (isc describe에 표시된 항목만)
   [파라미터 이름]: [값]
 ```
@@ -108,7 +126,7 @@ module:
   version: "0.1.0"       # 수정 가능
 hook:
   profile: [프로파일]    # 변경 금지
-  version: "1.0"         # 변경 금지
+  version: [프로파일 버전] # 변경 금지 (생성 시 자동 기입)
   source: logic.hpp      # 변경 금지
 ```
 
@@ -156,7 +174,9 @@ open("features.bin", "wb").write(struct.pack(f"<{len(values)}f", *values))   # f
 check → reference(hw_emu) → build → device_wait → device_open → execute → compare → record
 ```
 
-- `hw` 실행 시 hw 빌드 **전에** 같은 입력을 `hw_emu`로 먼저 돌려, 실패하면 약 40분짜리 hw 빌드를 시작하지 않습니다. 끝나면 두 출력을 바이트 단위로 비교합니다.
+- `hw` 실행 시 hw 빌드 **전에** 같은 입력을 `hw_emu`로 먼저 돌려, 실패하면 수십 분 걸리는 hw 빌드를 시작하지 않습니다. 끝나면 두 출력을 바이트 단위로 비교합니다.
+  검증 방식은 연산별 설정이며, 현재 모든 연산이 이 방식을 씁니다.
+- `--target`을 생략하면 연산이 선언한 첫 타깃으로 실행합니다(현재 모든 연산이 `hw_emu`).
 - 빌드 결과는 지문(연산·버전·빌드 파라미터·타깃·사용자 코드)별로 캐시되어 재사용됩니다.
 
 **연산 선택형 예제**
@@ -164,7 +184,7 @@ check → reference(hw_emu) → build → device_wait → device_open → execut
 ```bash
 isc new compressor --operation lz4 --set block_size=65536
 isc check compressor
-isc run compressor --input [입력 파일]               # hw_emu (기본)
+isc run compressor --input [입력 파일]               # 기본 타깃 (hw_emu)
 isc run compressor --input [입력 파일] --target hw
 isc records --module compressor                      # 실행 기록 (--csv 로 내보내기)
 ```
@@ -214,7 +234,7 @@ isc report [실험 이름]
 
 **꼭 확인할 사항**
 1. 로직을 고치는 동안에는 `hw_emu`로 확인하고 마지막에 `--target hw`로 실행합니다. 상수만 바꿔도 재빌드됩니다.
-2. 기본 검증은 `hw`와 `hw_emu` 결과의 일치만 확인합니다. 로직이 의도대로 동작하는지는 작은 입력으로 직접 확인합니다.
+2. 현재 기본 검증은 `hw`와 `hw_emu` 결과의 일치만 확인합니다. 로직이 의도대로 동작하는지는 작은 입력으로 직접 확인합니다.
 3. Hook 입력 크기가 값 크기의 배수가 아니면 남는 끝 바이트는 오류 없이 무시됩니다.
 4. 장치는 한 번에 한 실행만 씁니다. 사용 중이면 기다리며, `--device-timeout SEC`로 대기 시간을 제한합니다.
 5. Hook 검사는 보안 샌드박스가 아닙니다. 신뢰하는 소스만 빌드합니다.
@@ -240,7 +260,7 @@ isc report [실험 이름]
 | `--set 파라미터=값` | `new` | 연산 파라미터 지정 |
 | `--type T`, `--out-type U` | `template`, `new-custom` | Hook 입력·출력 타입 지정 |
 | `--from 파일.hpp` | `new-custom` | 작성한 로직 파일로 모듈 생성 |
-| `--target hw_emu\|hw` | `build`, `run` | 실행 대상 (기본 `hw_emu`) |
+| `--target hw_emu\|hw` | `build`, `run` | 실행 대상 (기본은 연산이 선언한 첫 타깃, 현재 `hw_emu`) |
 | `--input FILE`, `--output FILE` | `run` | 입력·출력 파일 |
 | `--no-validate` | `run` | 결과 검증 생략 |
 | `--device-timeout SEC` | `run`, `bench` | 장치 대기 시간 제한 |
