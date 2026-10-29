@@ -108,22 +108,13 @@ isc describe [연산 이름]
 출력(`isc_topk_pairs`)은 `k`개의 `(u32 id, i32 score)`입니다. 점수는 정수 내적이고 순위는 점수 내림차순,
 같으면 id 오름차순이며, 모자란 칸은 `id = 0xFFFFFFFF`, `score = -2147483648`입니다. 부동소수점이 없고
 순위가 전순서라서 `hw_emu`, `hw`, CPU 기준선이 같은 바이트를 내야 하고, `hw` 실행은 매번 `hw_emu`
-출력과 바이트 대조합니다(CPU 기준선과의 일치는 단위 테스트와 인수 절차에서 확인합니다). 헤더가 말하는
+출력과 바이트 대조합니다(CPU 기준선과의 일치는 인수 절차에서 확인합니다). 헤더가 말하는
 크기와 실제 크기가 다른 입력은 빌드를 시작하기 전에 거절합니다.
 
 `hw` 실행의 기본 검증(`cross_target`)은 같은 입력으로 `hw_emu`를 먼저 돌리므로 검증할 입력은 작게
 잡습니다(예: 4096 × 128, 약 0.5MB). 4096 × 128에서 `hw_emu` 빌드는 약 3분, 실행은 약 25초입니다
 (2026-10-06, U50 플랫폼 `xilinx_u50_gen3x16_xdma_5_202210_1`). 큰 데이터베이스는
-`isc run --no-validate`로 돌리고 출력을 기준선과 직접 대조합니다. 합성 입력은 다음 명령으로 만듭니다.
-
-```bash
-python3 scripts/make_vector_input.py --rows 4096 --dim 128 --seed 1 --plant 8 -o datasets/vec_4k_128.bin
-```
-
-`--plant 8`은 질의에 잡음을 더한 근접 복사본 8개를 데이터베이스에 심고 그 id를 stderr에 알립니다.
-순서와 무관하게 검색 결과의 앞 8개가 심은 id들과 같아야 합니다(`--plant` ≤ `k`이고 dim이 32 이상일 때.
-심은 id는 id 순으로 알리고 결과는 점수 순이라 집합으로 비교하며, dim이 16 이하이면 잡음 때문에 자주
-어긋납니다).
+`isc run --no-validate`로 돌리고 출력을 기준선과 직접 대조합니다.
 
 ### 2.2. 스켈레톤 구조
 
@@ -241,8 +232,6 @@ isc run clip_filter.hpp --input features.bin --target hw
   두 출력을 비교합니다.
 - 검증은 `hw`와 `hw_emu` 결과의 일치만 확인합니다. 조건이 의도한 대로 동작하는지는 이 검증이 대신하지
   못합니다. Hook에는 CPU 기준선이 없어 `isc bench`의 가속 판정도 나오지 않습니다(시간 측정은 됩니다).
-- 생성 코드를 CPU에서 검사하려면 Vitis의 `ap_int.h`와 `g++`가 필요합니다
-  (`ISC_HLS_INCLUDE=<ap_int.h가 있는 디렉터리> python3 -m unittest discover -s tests`).
 
 ## 3. 모듈 예제 및 실행 방법
 
@@ -483,7 +472,7 @@ hasher         sha256         8MB      3.833     10.194      0.050      1.049   
 | `vector_topk` | `numpy` 정수 내적 + `lexsort` (`pip install numpy` 필요) | 가능 |
 | `lz4` | `lz4.block` (`pip install lz4` 필요) | 불가 |
 
-`vector_topk`의 기준선은 정확성 대조(단위 테스트와 인수 절차)용이며 `isc bench` 대상이 아닙니다 — 벤치
+`vector_topk`의 기준선은 정확성 대조(인수 절차)용이며 `isc bench` 대상이 아닙니다 — 벤치
 입력은 구조 없는 바이트라 이 연산의 입력 검사가 거절합니다.
 
 LZ4 는 CPU 구현과 커널이 서로 다른, 그러나 둘 다 올바른 블록을 냅니다. 그래서

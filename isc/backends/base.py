@@ -34,7 +34,7 @@ class DeviceInfo:
 
     @property
     def id(self) -> str:
-        """Identity shared by events, metrics and the API.
+        """Identity shared by events and metrics.
 
         A card is named by its slot (the PCIe address), which survives a reboot, not by an
         index that can change; an emulated device is named by the target it emulates.

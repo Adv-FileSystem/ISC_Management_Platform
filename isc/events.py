@@ -3,7 +3,7 @@
 One JSONL file per run (`artifacts/events/<run_id>.jsonl`), one event per line, flushed and
 fsynced as it is written -- the discipline of records.jsonl, for the same reason: it has to
 survive the process that wrote it. Nothing here knows a vendor, a dashboard or HTTP; the
-consumers (`isc status`, `isc watch`, later an API) read the file and nothing else.
+consumers (`isc status`, `isc watch`) read the file and nothing else.
 
 Schema v1. Fields are only ever added; a reader ignores types and fields it does not know.
 
