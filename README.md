@@ -28,18 +28,14 @@ ISC가 제공하는 FPGA 연산으로 모듈을 만들고 **검사 → 빌드 �
 현재 기준입니다. 최신 정보는 `isc devices`, `isc operations`, `isc describe [연산 이름]`으로 확인합니다.
 `hw`/`hw_emu`, `ap_int.h`, HLS pragma 등은 현재 백엔드(AMD Vitis/XRT)의 용어입니다.
 
-| 지원 장치 | 백엔드 | 개발 플랫폼 | 빌드 타깃 |
+| 지원 장치 | 지원 연산 | 종류 | 기능 |
 |---|---|---|---|
-| AMD Alveo U50 | XRT 2023.1 / Vitis 2025.1 | `xilinx_u50_gen3x16_xdma_5_202210_1` (HBM) | `hw_emu`, `hw` |
-
-| 지원 연산 | 종류 | 기능 | `VITIS_LIBRARIES` |
-|---|---|---|---|
-| `adler32` / `crc32` | 내장 | 체크섬 | 필요 |
-| `sha256` | 내장 | 해시 | 필요 |
-| `identity` | 내장 | 복사 | 불필요 |
-| `lz4` | 내장 | 블록 압축 | 필요 |
-| `vector_topk` | 내장 | 정수 내적 상위 k | 불필요 |
-| `filter` / `map` / `aggregate` | Hook | 조건 필터 / 변환 / 조건부 집계 | 불필요 |
+| **AMD Alveo U50** | `adler32` / `crc32` | 내장 | 체크섬 |
+| | `sha256` | 내장 | 해시 |
+| | `identity` | 내장 | 복사 |
+| | `lz4` | 내장 | 블록 압축 |
+| | `vector_topk` | 내장 | 정수 내적 상위 k |
+| | `filter` / `map` / `aggregate` | Hook | 조건 필터 / 변환 / 조건부 집계 |
 
 **목차**: [1. 설치](#1-설치-및-환경-구성) · [2. 모듈 생성](#2-모듈-생성-스켈레톤) ·
 [3. 로직 작성](#3-로직-작성-hook-템플릿) · [4. 빌드·실행·검증](#4-빌드실행검증) ·
@@ -52,7 +48,7 @@ git clone https://github.com/Adv-FileSystem/ISC_Management_Platform.git
 cd ISC_Management_Platform
 python3 -m pip install -e .        # 설치 없이 쓰려면 isc 대신 python3 -m isc
 source /opt/xilinx/xrt/setup.sh
-export VITIS_LIBRARIES=[Vitis Libraries 2025.1 경로]   # 지원 연산 표에서 '필요'인 연산 빌드에 필요
+export VITIS_LIBRARIES=[Vitis Libraries 2025.1 경로]   # adler32, crc32, lz4, sha256 빌드에 필요
 isc doctor                         # 환경과 FPGA 카드 확인
 ```
 
