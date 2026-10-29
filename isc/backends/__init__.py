@@ -2,7 +2,8 @@
 from __future__ import annotations
 
 from isc.backends.base import (
-    Backend, BackendError, BuildOutput, BuildRequest, Buffer, DeviceInfo, Session, Timings,
+    Backend, BackendError, BuildOutput, BuildProgress, BuildRequest, Buffer, DeviceInfo, Session,
+    Timings,
 )
 from isc.backends.xrt import XrtBackend
 
@@ -25,6 +26,6 @@ def backend_names() -> list[str]:
 
 
 __all__ = [
-    "Backend", "BackendError", "BuildOutput", "BuildRequest", "Buffer",
+    "Backend", "BackendError", "BuildOutput", "BuildProgress", "BuildRequest", "Buffer",
     "DeviceInfo", "Session", "Timings", "get_backend", "backend_names",
 ]

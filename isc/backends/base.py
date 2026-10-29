@@ -14,7 +14,7 @@ from abc import ABC, abstractmethod
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Iterator
+from typing import Any, Callable, Iterator
 
 from isc.manifest import Manifest
 
@@ -30,6 +30,32 @@ class DeviceInfo:
     name: str
     address: str = ""          # PCIe BDF or equivalent vendor address
     emulated: bool = False
+    target: str = ""           # the build target this session was opened for ("" when only listed)
+
+    @property
+    def id(self) -> str:
+        """Identity shared by events, metrics and the API.
+
+        A card is named by its slot (the PCIe address), which survives a reboot, not by an
+        index that can change; an emulated device is named by the target it emulates.
+        """
+        if self.emulated:
+            return f"{self.backend}:emu:{self.target or 'emu'}:{self.index}"
+        if self.address:
+            return f"{self.backend}:{self.address}"
+        return f"{self.backend}:index{self.index}"
+
+
+@dataclass(frozen=True)
+class BuildProgress:
+    """One step of a long build, in vendor-neutral terms. Counts are only what the tool said."""
+    step: str                  # "compile", "link.<name>", "vpl.<name>": the backend's own steps
+    state: str                 # "started" | "running" | "completed"
+    current: int | None = None
+    total: int | None = None
+    unit: str = ""             # what current/total count: "jobs", "tasks"
+    message: str = ""
+    clock: str = ""            # the tool's own HH:MM:SS stamp on the line, when it prints one
 
 
 @dataclass
@@ -37,7 +63,9 @@ class BuildRequest:
     manifest: Manifest
     target: str
     output_dir: Path           # backend writes its artifacts here
+    kernel_source: Path | None = None  # complete top-level source prepared by the core
     timeout_seconds: float | None = None
+    on_progress: Callable[[BuildProgress], None] | None = None  # told as the build moves
 
 
 @dataclass
@@ -53,6 +81,17 @@ class Timings:
     host_to_device_ms: float = 0.0
     kernel_ms: float = 0.0
     device_to_host_ms: float = 0.0
+
+    def reset(self) -> None:
+        """Zero the phase timers.
+
+        Phase timers accumulate, which is what a single run wants. A benchmark
+        needs per-iteration numbers out of one long-lived session, so it resets
+        between iterations.
+        """
+        self.host_to_device_ms = 0.0
+        self.kernel_ms = 0.0
+        self.device_to_host_ms = 0.0
 
     @contextmanager
     def measure(self, phase: str) -> Iterator[None]:

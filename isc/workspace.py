@@ -1,20 +1,39 @@
-"""Workspace layout, module discovery, and device reservation.
+"""Workspace layout and module discovery (device reservation lives in isc/devices.py).
 
     <root>/modules/<id>/module.yaml     modules the user writes
     <root>/artifacts/cache/<fp>/        build outputs, reused across runs
     <root>/artifacts/outputs/           execution outputs
     <root>/artifacts/records.jsonl      one line per run
     <root>/artifacts/locks/             device reservations
+    <root>/artifacts/events/            run events, one JSONL file per run
+    <root>/experiments/<id>/experiment.yaml   benchmark matrices the user writes
+    <root>/artifacts/benchmarks/        raw benchmark samples, one file per run
+    <root>/artifacts/benchdata/         generated benchmark inputs, cached by size
 """
 from __future__ import annotations
 
-import fcntl
 import os
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Iterator
 
 from isc.manifest import MANIFEST_NAME, Manifest
+
+
+@contextmanager
+def working_directory(directory: Path) -> Iterator[None]:
+    """Run inside `directory`, then go back.
+
+    Emulation needs emconfig.json in the working directory, and the simulator
+    scatters scratch files next to it -- both belong in the build directory,
+    not wherever the user happened to invoke the CLI from.
+    """
+    previous = Path.cwd()
+    os.chdir(directory)
+    try:
+        yield
+    finally:
+        os.chdir(previous)
 
 
 class Workspace:
@@ -46,6 +65,30 @@ class Workspace:
     def locks_dir(self) -> Path:
         return self.artifacts_dir / "locks"
 
+    @property
+    def events_dir(self) -> Path:
+        return self.artifacts_dir / "events"
+
+    @property
+    def experiments_dir(self) -> Path:
+        return self.root / "experiments"
+
+    @property
+    def benchmarks_dir(self) -> Path:
+        return self.artifacts_dir / "benchmarks"
+
+    @property
+    def benchdata_dir(self) -> Path:
+        return self.artifacts_dir / "benchdata"
+
+    def experiment_ids(self) -> list[str]:
+        if not self.experiments_dir.is_dir():
+            return []
+        return sorted(
+            entry.name for entry in self.experiments_dir.iterdir()
+            if (entry / "experiment.yaml").exists()
+        )
+
     # -- module discovery -----------------------------------------------
     def module_ids(self) -> list[str]:
         if not self.modules_dir.is_dir():
@@ -61,19 +104,6 @@ class Workspace:
             known = ", ".join(self.module_ids()) or "none"
             raise LookupError(f"unknown module {module_id!r} in {self.modules_dir} (known: {known})")
         return Manifest.load(directory)
-
-    # -- device reservation ----------------------------------------------
-    @contextmanager
-    def device_lock(self, key: str) -> Iterator[None]:
-        """Exclusive, cross-process reservation so two runs cannot share a card."""
-        self.locks_dir.mkdir(parents=True, exist_ok=True)
-        path = self.locks_dir / f"{key}.lock"
-        with path.open("w") as handle:
-            fcntl.flock(handle, fcntl.LOCK_EX)
-            try:
-                yield
-            finally:
-                fcntl.flock(handle, fcntl.LOCK_UN)
 
     # -- discovery -------------------------------------------------------
     @classmethod

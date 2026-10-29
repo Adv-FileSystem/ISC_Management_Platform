@@ -23,6 +23,11 @@ CSV_COLUMNS = [
 ]
 
 
+# Set for the reference run a parent run starts (isc/lifecycle.py): the child sees its
+# parent's run id here, and says so when it reserves a device.
+PARENT_RUN_ENV = "ISC_PARENT_RUN_ID"
+
+
 def new_run_id() -> str:
     return f"{datetime.now().strftime('%Y%m%dT%H%M%S')}-{uuid.uuid4().hex[:6]}"
 
