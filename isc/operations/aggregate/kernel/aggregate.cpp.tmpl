@@ -1,0 +1,48 @@
+// 플랫폼이 생성하는 래퍼 커널 (프로파일 aggregate). 사용자는 isc_user_logic.hpp 의
+// isc_where() 만 쓴다. 이 파일은 빌드마다 템플릿에서 만들어지고 artifacts/cache/<지문>/ 에 남는다.
+//
+// 결과: result[0]=count, result[1]=sum(64비트로 감김), result[2]=min, result[3]=max.
+// 부호 있는 입력은 64비트로 부호 확장한다. 조건을 만족한 값이 없으면 모두 0.
+#include <ap_int.h>
+#include <stdint.h>
+
+#include "isc_user_logic.hpp"
+
+extern "C" {
+
+void isc_aggregate_kernel(const ${IN_T}* input, uint64_t* result, uint32_t row_count) {
+#pragma HLS INTERFACE m_axi port = input offset = slave bundle = gmem0
+#pragma HLS INTERFACE m_axi port = result offset = slave bundle = gmem1
+#pragma HLS INTERFACE s_axilite port = input bundle = control
+#pragma HLS INTERFACE s_axilite port = result bundle = control
+#pragma HLS INTERFACE s_axilite port = row_count bundle = control
+#pragma HLS INTERFACE s_axilite port = return bundle = control
+
+    uint64_t count = 0;
+    uint64_t sum = 0;
+    ${ACC_T} lowest = 0;
+    ${ACC_T} highest = 0;
+
+aggregate_rows:
+    for (uint32_t row = 0; row < row_count; ++row) {
+#pragma HLS PIPELINE II = 1
+        ${IN_T} value = input[row];
+        if (isc_where(value)) {
+            ${ACC_T} widened = (${ACC_T})value;
+            if (count == 0 || widened < lowest) {
+                lowest = widened;
+            }
+            if (count == 0 || widened > highest) {
+                highest = widened;
+            }
+            sum += (uint64_t)widened;
+            ++count;
+        }
+    }
+    result[0] = count;
+    result[1] = sum;
+    result[2] = (uint64_t)lowest;
+    result[3] = (uint64_t)highest;
+}
+
+}

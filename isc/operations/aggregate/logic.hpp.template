@@ -1,0 +1,17 @@
+// ISC Hook 시작 파일 — 프로파일 ${PROFILE} (${IN_NAME} 값의 조건부 집계)
+//
+// 입력: ${INPUT_DESC}
+// 출력: ${OUTPUT_DESC}
+//
+// 고치는 곳: 아래 함수의 return 줄만. 함수 이름과 인자 이름(value)은 바꾸지 마십시오.
+// 인자 타입(${IN_T})이 입력 값의 타입을 정합니다. 함수가 true 를 돌려준 값만 집계됩니다.
+${EXAMPLES}
+// 쓸 수 없는 것: 동적 할당, 파일 입출력, HLS INTERFACE 지시어.
+#pragma once
+
+#include <ap_int.h>
+#include <stdint.h>
+
+inline bool isc_where(${IN_T} value) {
+    return true;   // ISC-TODO: 집계할 값의 조건으로 바꾸십시오 (지금은 모든 값을 집계합니다)
+}

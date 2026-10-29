@@ -1,0 +1,17 @@
+// ISC Hook 시작 파일 — 프로파일 ${PROFILE} (${IN_NAME} 값을 ${OUT_NAME} 값으로 변환)
+//
+// 입력: ${INPUT_DESC}
+// 출력: ${OUTPUT_DESC}
+//
+// 고치는 곳: 아래 함수의 return 줄만. 함수 이름과 인자 이름(value)은 바꾸지 마십시오.
+// 인자 타입(${IN_T})이 입력 값의 타입을, 반환 타입(${OUT_T})이 출력 값의 타입을 정합니다.
+${EXAMPLES}
+// 쓸 수 없는 것: 동적 할당, 파일 입출력, HLS INTERFACE 지시어.
+#pragma once
+
+#include <ap_int.h>
+#include <stdint.h>
+
+inline ${OUT_T} isc_map(${IN_T} value) {
+    return value;   // ISC-TODO: 변환식으로 바꾸십시오 (지금은 값을 그대로 돌려줍니다)
+}

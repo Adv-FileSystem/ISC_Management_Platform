@@ -18,6 +18,10 @@ output:
 
 parameters: {}
 
+baseline:
+  equivalence: exact
+  description: zlib.crc32
+
 runtime:
   backend: xrt
 

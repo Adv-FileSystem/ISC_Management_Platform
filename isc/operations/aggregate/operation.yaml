@@ -1,0 +1,59 @@
+operation:
+  id: aggregate
+  name: Column Aggregate Hook
+  version: "1.0"
+  category: database
+  kind: hook
+  description: 사용자가 작성한 조건 함수를 만족하는 값의 개수·합·최솟값·최댓값을 구합니다.
+
+input:
+  representation: columnar
+  format: elements
+  min_bytes: 0
+
+output:
+  representation: binary
+  format: aggregate_u64x4
+  fixed_bytes: 32
+
+parameters: {}
+
+hook:
+  symbol: isc_where
+  signature: "bool isc_where(T value)"
+  returns: bool
+  output_element: none
+  element_types: [u8, u16, u32, u64, i8, i16, i32, i64]
+  template: logic.hpp.template
+  staged_header: isc_user_logic.hpp
+  input_description: "{in} 값(little-endian)이 이어진 파일"
+  output_description: "고정 32바이트: little-endian u64 네 개 (count, sum, min, max). 조건을 만족한 값이 없으면 모두 0"
+  examples:
+    int:
+      - "return value >= 1000;"
+      - "return value >= 100 && value < 200;"
+      - "return (value & 1) == 0;"
+
+runtime:
+  backend: xrt
+
+kernel:
+  name: isc_aggregate_kernel
+  source: kernel/aggregate.cpp.tmpl
+  include_dirs: []
+  arguments:
+    - {name: input, kind: buffer, direction: in}
+    - {name: result, kind: buffer, direction: out}
+    - {name: row_count, kind: scalar, direction: in}
+  memory:
+    - {port: m_axi_gmem0, bank: 0}
+    - {port: m_axi_gmem1, bank: 1}
+
+build:
+  platform: xilinx_u50_gen3x16_xdma_5_202210_1
+  memory_type: HBM
+  targets: [hw_emu, hw]
+
+validation:
+  mode: cross_target
+  reference_target: hw_emu

@@ -4,8 +4,20 @@ __pycache__/
 .venv/
 artifacts/
 datasets/sample.bin
-modules/compressor/
+datasets/vec_*.bin
 _x/
 .Xil/
 *.log
 !tests/**/*.log
+
+# 사용자 작업 공간: isc new / new-custom / run 로직.hpp 가 만드는 모듈
+modules/
+
+# 빌드·도구 부산물 (Vitis IP 캐시, Claude 도구 상태)
+.ipcache/
+.omc/
+
+# 개발 소스가 아닌 자료 (논문·발표·그림·데모). docs/ 는 커밋하지 않는다 (설계 문서 포함).
+docs/*
+isc-demo/
+scripts/paper/

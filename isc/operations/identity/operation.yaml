@@ -17,6 +17,10 @@ output:
 
 parameters: {}
 
+baseline:
+  equivalence: exact
+  description: bytes(data) 복사
+
 runtime:
   backend: xrt
 

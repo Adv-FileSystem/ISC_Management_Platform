@@ -8,12 +8,14 @@ from typing import Any
 
 import yaml
 
-from isc.operations import OperationError, OperationSpec, get_operation
+from isc.generate import HookTypes, SignatureError, parse_signature
+from isc.loader import load_optional_callable
+from isc.operations import OperationError, OperationSpec, get_operation, get_profile
 
 MANIFEST_NAME = "module.yaml"
 ARG_KINDS = ("buffer", "scalar")
 ARG_DIRECTIONS = ("in", "out", "inout")
-VALIDATION_MODES = ("cross_target", "none")
+VALIDATION_MODES = ("cross_target", "cpu_baseline", "none")
 DEFAULT_REFERENCE_TARGET = "hw_emu"
 
 
@@ -52,6 +54,14 @@ class BuildSpec:
 
 
 @dataclass(frozen=True)
+class HookSpec:
+    profile: str
+    source: str
+    symbol: str
+    staged_header: str
+
+
+@dataclass(frozen=True)
 class Manifest:
     id: str
     name: str
@@ -64,6 +74,7 @@ class Manifest:
     validation_mode: str
     validation_reference_target: str
     directory: Path
+    hook: HookSpec | None = None
 
     @property
     def operation_id(self) -> str:
@@ -74,15 +85,76 @@ class Manifest:
         return self.operation.version
 
     @property
+    def build_parameters(self) -> dict[str, Any]:
+        """Only the parameters that can change the device binary."""
+        return self.operation.build_parameters(self.parameters)
+
+    @property
     def kernel_source(self) -> Path:
         return self.operation.directory / self.kernel.source
+
+    @property
+    def is_hook(self) -> bool:
+        return self.hook is not None
+
+    @property
+    def hook_source(self) -> Path:
+        if self.hook is None:
+            raise ManifestError(f"module {self.id!r} does not use a hook profile")
+        return (self.directory / self.hook.source).resolve()
+
+    @property
+    def source_files(self) -> list[Path]:
+        sources = [self.kernel_source]
+        if self.is_hook:
+            sources.append(self.hook_source)
+        return sources
 
     @property
     def adapter_directory(self) -> Path:
         return self.operation.directory
 
+    def hook_types(self) -> HookTypes:
+        """Element types the user's function declares; ManifestError when unreadable."""
+        if self.hook is None:
+            raise ManifestError(f"module {self.id!r} does not use a hook profile")
+        try:
+            return parse_signature(self.hook_source.read_text(), self.operation.hook_spec)
+        except SignatureError as exc:
+            raise ManifestError(f"{self.hook.source}: {exc}") from exc
+
+    @property
+    def adapter_parameters(self) -> dict[str, Any]:
+        """What the adapter receives: the user's parameters plus platform-derived types."""
+        if not self.is_hook:
+            return self.parameters
+        return {**self.parameters, "_types": self.hook_types().adapter_view()}
+
     def validate_input(self, data: bytes) -> None:
         self.operation.validate_input(data)
+        self._check_input_with_adapter(data)
+        if self.is_hook:
+            element = self.hook_types().inp.element
+            if len(data) % element.size:
+                raise OperationError(
+                    f"module {self.id!r} reads {element.name} values ({element.size} bytes "
+                    f"each); input of {len(data)} bytes is not a multiple of {element.size}"
+                )
+
+    def _check_input_with_adapter(self, data: bytes) -> None:
+        """An operation whose input has structure says so by defining `check_input` in its adapter.
+
+        The input contract (min/max/multiple of bytes) cannot say "the header matches the size".
+        Asking here means a malformed input is refused before the first build, not after it.
+        """
+        check = load_optional_callable(self.adapter_directory, "adapter.py", "check_input",
+                                       f"operation_{self.operation_id}")
+        if check is None:
+            return
+        try:
+            check(data, self.adapter_parameters)
+        except ValueError as exc:
+            raise OperationError(f"module {self.id!r}: {exc}") from exc
 
     def resolved_include_dirs(self) -> list[Path]:
         resolved = []
@@ -98,7 +170,7 @@ class Manifest:
         return resolved
 
     def to_dict(self) -> dict[str, Any]:
-        return {
+        result = {
             "id": self.id,
             "name": self.name,
             "version": self.version,
@@ -116,6 +188,17 @@ class Manifest:
             },
             "directory": str(self.directory),
         }
+        if self.hook is not None:
+            result["hook"] = {
+                "profile": self.hook.profile,
+                "source": self.hook.source,
+                "symbol": self.hook.symbol,
+            }
+            try:
+                result["hook"]["types"] = self.hook_types().to_dict()
+            except ManifestError as exc:
+                result["hook"]["types"] = f"unreadable: {exc}"
+        return result
 
     @classmethod
     def load(cls, directory: Path) -> "Manifest":
@@ -133,25 +216,54 @@ class Manifest:
 
     @classmethod
     def _parse(cls, raw: dict[str, Any], directory: Path) -> "Manifest":
-        unknown_sections = sorted(set(raw) - {"module", "operation", "parameters"})
+        unknown_sections = sorted(set(raw) - {"module", "operation", "hook", "parameters"})
         if unknown_sections:
             raise ManifestError(
                 "module.yaml contains unsupported section(s): "
                 + ", ".join(unknown_sections)
             )
         module = _section(raw, "module")
-        operation_selection = _section(raw, "operation")
-        operation_id = _require(operation_selection, "id", "operation")
+        has_operation = "operation" in raw
+        has_hook = "hook" in raw
+        if has_operation == has_hook:
+            raise ManifestError("module.yaml must contain exactly one of operation or hook")
+
+        hook: HookSpec | None = None
+        if has_hook:
+            selection = _section(raw, "hook")
+            operation_id = _require(selection, "profile", "hook")
+            resolver = get_profile
+            selection_name = "hook"
+        else:
+            selection = _section(raw, "operation")
+            operation_id = _require(selection, "id", "operation")
+            resolver = get_operation
+            selection_name = "operation"
         try:
-            operation = get_operation(operation_id)
+            operation = resolver(operation_id)
         except OperationError as exc:
             raise ManifestError(str(exc)) from exc
 
-        requested_version = str(operation_selection.get("version") or operation.version)
+        requested_version = str(selection.get("version") or operation.version)
         if requested_version != operation.version:
             raise ManifestError(
-                f"operation {operation_id!r} version {requested_version!r} is not installed "
+                f"{selection_name} {operation_id!r} version {requested_version!r} is not installed "
                 f"(available: {operation.version})"
+            )
+        if has_hook:
+            source_name = _require(selection, "source", "hook")
+            source = (directory / source_name).resolve()
+            try:
+                source.relative_to(directory)
+            except ValueError as exc:
+                raise ManifestError("hook.source must stay inside the module directory") from exc
+            if not source.is_file():
+                raise ManifestError(f"hook source not found: {source}")
+            hook = HookSpec(
+                profile=operation.id,
+                source=source_name,
+                symbol=str(operation.hook_spec["symbol"]),
+                staged_header=str(operation.hook_spec["staged_header"]),
             )
         supplied_parameters = raw.get("parameters") or {}
         if not isinstance(supplied_parameters, dict):
@@ -213,6 +325,7 @@ class Manifest:
             validation_reference_target=str(
                 validation_raw.get("reference_target", DEFAULT_REFERENCE_TARGET)
             ),
+            hook=hook,
             directory=directory,
         )
         if not manifest.kernel_source.is_file():

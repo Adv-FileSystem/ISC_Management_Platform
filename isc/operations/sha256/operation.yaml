@@ -17,6 +17,10 @@ output:
 
 parameters: {}
 
+baseline:
+  equivalence: exact
+  description: hashlib.sha256
+
 runtime:
   backend: xrt
 

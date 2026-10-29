@@ -1,9 +1,15 @@
 """Correctness check of a run's output.
 
-One validation mode: cross_target. The same input is re-executed on the
-module's reference target (module.yaml: validation.reference_target, normally
-hw_emu) and the two outputs are compared byte for byte. sw_emu was removed in
-Vitis 2025.1, so it is never a usable reference target -- see isc/check.py.
+Two validation modes, both a byte-for-byte comparison against a reference:
+
+- `cross_target`: re-execute the same input on the module's reference target
+  (module.yaml: validation.reference_target, normally hw_emu). sw_emu was
+  removed in Vitis 2025.1, so it is never a usable reference target -- see
+  isc/check.py.
+- `cpu_baseline`: compare against the operation's CPU reference implementation
+  (isc/baseline.py). Far cheaper than a hw_emu run, but only meaningful where
+  the CPU result is the *only* correct answer -- the operation must declare
+  `baseline.equivalence: exact`.
 
 Running the module on the reference target itself has nothing to compare
 against, so that case always passes; isc/lifecycle.py is what decides whether
@@ -11,7 +17,8 @@ a reference execution is needed and supplies its output here.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from typing import Any
 
 
 @dataclass
@@ -19,9 +26,14 @@ class ValidationResult:
     mode: str
     passed: bool
     detail: str
+    # What the output was compared with (run_id, target, sha256, size); empty when nothing was.
+    reference: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, object]:
-        return {"mode": self.mode, "passed": self.passed, "detail": self.detail}
+        data: dict[str, object] = {"mode": self.mode, "passed": self.passed, "detail": self.detail}
+        if self.reference:
+            data["reference"] = self.reference
+        return data
 
 
 def validate(mode: str, output: bytes, reference_output: bytes | None) -> ValidationResult:

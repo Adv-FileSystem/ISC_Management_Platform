@@ -60,3 +60,14 @@ def load_callable(directory: Path, filename: str, attribute: str, namespace: str
     if not callable(function):
         raise ModuleCodeError(f"{directory / filename} must define a callable `{attribute}`")
     return function
+
+
+def load_optional_callable(directory: Path, filename: str, attribute: str, namespace: str):
+    """Like load_callable, for a function the file may leave out: None when it does."""
+    loaded = load_file(directory, filename, f"{namespace}_{attribute}")
+    function = getattr(loaded, attribute, None)
+    if function is None:
+        return None
+    if not callable(function):
+        raise ModuleCodeError(f"{directory / filename} defines `{attribute}` but it is not callable")
+    return function

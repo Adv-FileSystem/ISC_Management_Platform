@@ -1,0 +1,64 @@
+operation:
+  id: filter
+  name: Column Filter Hook
+  version: "1.0"
+  category: database
+  kind: hook
+  description: 사용자가 작성한 조건 함수로 값의 나열(컬럼)에서 행을 골라냅니다.
+
+input:
+  representation: columnar
+  format: elements
+  min_bytes: 0
+
+output:
+  representation: columnar
+  format: elements
+  variable_size: true
+
+parameters: {}
+
+hook:
+  symbol: isc_filter
+  signature: "bool isc_filter(T value)"
+  returns: bool
+  output_element: input
+  element_types: [u8, u16, u32, u64, i8, i16, i32, i64, f32]
+  template: logic.hpp.template
+  staged_header: isc_user_logic.hpp
+  input_description: "{in} 값(little-endian)이 이어진 파일"
+  output_description: "함수가 true 를 돌려준 {in} 값만, 입력 순서대로"
+  examples:
+    int:
+      - "return value >= 1000;"
+      - "return value >= 100 && value < 200;"
+      - "return (value & 1) == 0;"
+    float:
+      - "return value > 0.5f;"
+      - "return value >= -3.0f && value <= 3.0f;"
+      - "return value == value;   // NaN 제외"
+
+runtime:
+  backend: xrt
+
+kernel:
+  name: isc_filter_kernel
+  source: kernel/filter.cpp.tmpl
+  include_dirs: []
+  arguments:
+    - {name: input, kind: buffer, direction: in}
+    - {name: output, kind: buffer, direction: out}
+    - {name: row_count, kind: scalar, direction: in}
+    - {name: output_count, kind: buffer, direction: out}
+  memory:
+    - {port: m_axi_gmem0, bank: 0}
+    - {port: m_axi_gmem1, bank: 1}
+
+build:
+  platform: xilinx_u50_gen3x16_xdma_5_202210_1
+  memory_type: HBM
+  targets: [hw_emu, hw]
+
+validation:
+  mode: cross_target
+  reference_target: hw_emu

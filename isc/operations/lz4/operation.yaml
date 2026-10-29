@@ -18,10 +18,20 @@ output:
 parameters:
   block_size:
     type: integer
+    # 호스트 어댑터의 루프와 버퍼 크기만 정한다. 커널 상수가 아니므로 값이
+    # 바뀌어도 장치 바이너리는 동일하고, 따라서 재빌드가 필요 없다.
+    scope: host
     description: 한 번의 커널 호출에서 처리할 바이트 수
     default: 65536
     minimum: 1024
     maximum: 65536
+
+baseline:
+  # CPU LZ4 와 장치 커널은 서로 다른, 그러나 둘 다 올바른 블록을 낸다.
+  # 성능 비교에만 쓰고 정확성 대조에는 쓰지 않는다.
+  equivalence: none
+  description: lz4.block (동일 프레이밍)
+  requires: lz4
 
 runtime:
   backend: xrt
