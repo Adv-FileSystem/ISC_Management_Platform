@@ -12,7 +12,7 @@ from pathlib import Path
 
 from isc.operations import baseline as baseline_module
 from isc.backends import backend_names
-from isc.generate import TODO_MARKER, strip_comments
+from isc.generator.generate import TODO_MARKER, strip_comments
 from isc.operations.loader import ModuleCodeError, load_file
 from isc.manifest import Manifest, ManifestError
 

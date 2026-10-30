@@ -16,7 +16,7 @@ from pathlib import Path
 
 from isc.backends import Backend, BackendError, BuildRequest, get_backend
 from isc.buildwatch import BuildWatch
-from isc.generate import render_kernel
+from isc.generator.generate import render_kernel
 from isc.manifest import Manifest
 from isc.workspace import Workspace
 

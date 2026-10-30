@@ -11,7 +11,7 @@ from isc.build import build
 from isc.check import check_module
 from isc.lifecycle import RunResult, revalidate, run
 from isc.manifest import Manifest, ManifestError
-from isc.scaffold import create_module
+from isc.generator.scaffold import create_module
 from isc.workspace import Workspace
 
 __version__ = "0.1.0"

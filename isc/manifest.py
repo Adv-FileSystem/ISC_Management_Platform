@@ -8,7 +8,7 @@ from typing import Any
 
 import yaml
 
-from isc.generate import HookTypes, SignatureError, parse_signature
+from isc.generator.generate import HookTypes, SignatureError, parse_signature
 from isc.operations.loader import load_optional_callable
 from isc.operations import OperationError, OperationSpec, get_operation, get_profile
 

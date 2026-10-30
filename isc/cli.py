@@ -36,7 +36,7 @@ from isc.operations import (
     get_operation, get_profile, operations as catalog_operations,
     parse_parameter_assignments, profiles as catalog_profiles,
 )
-from isc.scaffold import (
+from isc.generator.scaffold import (
     create_hook_module, create_module, create_module_from_logic, is_logic_file,
     render_profile_starter,
 )

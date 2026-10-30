@@ -8,7 +8,7 @@ from typing import Any, Callable
 
 import yaml
 
-from isc.generate import HookTypes, SignatureError, parse_signature, render_starter, strip_comments
+from isc.generator.generate import HookTypes, SignatureError, parse_signature, render_starter, strip_comments
 from isc.manifest import Manifest
 from isc.operations import (
     OperationSpec, canonical_profile_id, get_operation, get_profile, profiles,
