@@ -23,7 +23,7 @@ CSV_COLUMNS = [
 ]
 
 
-# Set for the reference run a parent run starts (isc/lifecycle.py): the child sees its
+# Set for the reference run a parent run starts (isc/lifecycle/orchestrator.py): the child sees its
 # parent's run id here, and says so when it reserves a device.
 PARENT_RUN_ENV = "ISC_PARENT_RUN_ID"
 

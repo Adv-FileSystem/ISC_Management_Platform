@@ -4,7 +4,7 @@ The reference output (another target's, or the CPU baseline's) is settled before
 build starts, so a wrong module fails on the cheap target; only the comparison has to
 wait for the device.
 
-Each step is also written as a run event (isc/events.py), so a long run can be followed
+Each step is also written as a run event (isc/lifecycle/events.py), so a long run can be followed
 from outside. The events never change what a run returns or records.
 
 This module contains no vendor vocabulary. It never sees an xclbin, a memory

@@ -84,7 +84,7 @@ def ensure_target_declared(manifest: Manifest, target: str) -> None:
 def build(workspace: Workspace, manifest: Manifest, target: str, *,
           force: bool = False, timeout_seconds: float | None = None,
           stage=None) -> BuildResult:
-    """`stage` (a StageHandle) is told how the build moves; see isc/buildwatch.py."""
+    """`stage` (a StageHandle) is told how the build moves; see isc/lifecycle/buildwatch.py."""
     ensure_target_declared(manifest, target)
     backend = get_backend(manifest.backend)
     key = fingerprint(manifest, backend, target)

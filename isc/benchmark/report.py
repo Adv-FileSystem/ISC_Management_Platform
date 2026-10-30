@@ -19,7 +19,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from isc.benchdata import format_size
+from isc.benchmark.benchdata import format_size
 
 # 가속으로 인정하는 최소 배율. 측정 잡음과 운영 복잡도를 감안한 값이다.
 ACCELERATION_THRESHOLD = 1.2

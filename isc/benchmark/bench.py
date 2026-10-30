@@ -29,13 +29,13 @@ from typing import Any, Callable
 import json
 
 from isc.operations import baseline as baseline_module
-from isc import benchdata
+from isc.benchmark import benchdata
 from isc.lifecycle import record
 from isc.backends import BackendError
 from isc.lifecycle.build import build
 from isc.lifecycle.devices import Owner, WaitInfo, describe_wait
 from isc.lifecycle.events import RunEvents, Sink, start_run
-from isc.experiment import Experiment
+from isc.benchmark.experiment import Experiment
 from isc.operations.loader import ModuleCodeError, load_callable
 from isc.lifecycle.manifest import Manifest
 from isc.lifecycle.runtime import Runtime
