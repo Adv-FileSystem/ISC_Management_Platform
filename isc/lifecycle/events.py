@@ -27,9 +27,9 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable, Iterator
 
-from isc.devices import process_alive
-from isc.record import PARENT_RUN_ENV
-from isc.workspace import Workspace
+from isc.lifecycle.devices import process_alive
+from isc.lifecycle.record import PARENT_RUN_ENV
+from isc.lifecycle.workspace import Workspace
 
 SCHEMA = 1
 HEARTBEAT_SECONDS = 30.0

@@ -17,7 +17,7 @@ from pathlib import Path
 from typing import Callable
 
 from isc.backends.base import BuildProgress
-from isc.workspace import Workspace
+from isc.lifecycle.workspace import Workspace
 
 HISTORY_FILE = "build_durations.jsonl"
 RECENT = 5

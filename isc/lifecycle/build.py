@@ -15,10 +15,10 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from isc.backends import Backend, BackendError, BuildRequest, get_backend
-from isc.buildwatch import BuildWatch
+from isc.lifecycle.buildwatch import BuildWatch
 from isc.generator.generate import render_kernel
-from isc.manifest import Manifest
-from isc.workspace import Workspace
+from isc.lifecycle.manifest import Manifest
+from isc.lifecycle.workspace import Workspace
 
 CACHE_SCHEMA = 2
 

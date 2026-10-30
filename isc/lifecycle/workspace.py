@@ -17,7 +17,7 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Iterator
 
-from isc.manifest import MANIFEST_NAME, Manifest
+from isc.lifecycle.manifest import MANIFEST_NAME, Manifest
 
 
 @contextmanager

@@ -23,18 +23,18 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable
 
-from isc import record
+from isc.lifecycle import record
 from isc.operations.baseline import BaselineUnavailable, compute as compute_baseline
 from isc.backends import BackendError
-from isc.build import BuildResult, build, ensure_target_declared
-from isc.check import check_module
-from isc.devices import Owner, WaitInfo
-from isc.events import RunEvents, Sink, silent, start_run
+from isc.lifecycle.build import BuildResult, build, ensure_target_declared
+from isc.lifecycle.check import check_module
+from isc.lifecycle.devices import Owner, WaitInfo
+from isc.lifecycle.events import RunEvents, Sink, silent, start_run
 from isc.operations.loader import ModuleCodeError, load_callable
-from isc.manifest import Manifest
-from isc.runtime import Runtime
-from isc.validate import ValidationResult, validate
-from isc.workspace import Workspace
+from isc.lifecycle.manifest import Manifest
+from isc.lifecycle.runtime import Runtime
+from isc.lifecycle.validate import ValidationResult, validate
+from isc.lifecycle.workspace import Workspace
 
 
 @dataclass

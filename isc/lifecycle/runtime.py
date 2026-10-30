@@ -20,10 +20,10 @@ from typing import Callable, Iterator
 
 from isc.backends import get_backend
 from isc.backends.base import DeviceInfo, Session
-from isc.devices import DeviceManager, Owner, WaitInfo, describe_wait
-from isc.events import RunEvents, silent
-from isc.manifest import Manifest
-from isc.workspace import Workspace, working_directory
+from isc.lifecycle.devices import DeviceManager, Owner, WaitInfo, describe_wait
+from isc.lifecycle.events import RunEvents, silent
+from isc.lifecycle.manifest import Manifest
+from isc.lifecycle.workspace import Workspace, working_directory
 
 
 @dataclass(frozen=True)

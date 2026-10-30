@@ -16,7 +16,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable, Iterator
 
-from isc.manifest import Manifest
+from isc.lifecycle.manifest import Manifest
 
 
 class BackendError(RuntimeError):

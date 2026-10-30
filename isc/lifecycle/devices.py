@@ -24,7 +24,7 @@ from typing import Callable, Iterator
 
 from isc.backends import BackendError, backend_names, get_backend
 from isc.backends.base import DeviceInfo
-from isc.workspace import Workspace
+from isc.lifecycle.workspace import Workspace
 
 POLL_SECONDS = 0.2     # how often a waiter tries the lock again
 REPORT_SECONDS = 5.0   # how often on_wait is repeated while the wait goes on

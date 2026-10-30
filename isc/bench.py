@@ -11,7 +11,7 @@ FPGA 는 무조건 진다. 오픈 비용은 device_open_ms 로 따로 기록하�
 
 측정 규약
 - 모듈마다 디바이스를 한 번 열고 그 세션 안에서 입력 크기를 순회한다.
-- 예약과 열기는 isc.runtime 이 맡는다. 예약을 기다린 시간은 device_wait_ms 로 따로 남기고
+- 예약과 열기는 isc.lifecycle.runtime 이 맡는다. 예약을 기다린 시간은 device_wait_ms 로 따로 남기고
   표본에는 들어가지 않는다.
 - 회차마다 Session.timings 를 리셋해 회차별 h2d/kernel/d2h 를 얻는다.
 - CPU 기준선은 같은 warmup/repeat 으로, 디바이스 락 밖에서 잰다.
@@ -29,16 +29,17 @@ from typing import Any, Callable
 import json
 
 from isc.operations import baseline as baseline_module
-from isc import benchdata, record
+from isc import benchdata
+from isc.lifecycle import record
 from isc.backends import BackendError
-from isc.build import build
-from isc.devices import Owner, WaitInfo, describe_wait
-from isc.events import RunEvents, Sink, start_run
+from isc.lifecycle.build import build
+from isc.lifecycle.devices import Owner, WaitInfo, describe_wait
+from isc.lifecycle.events import RunEvents, Sink, start_run
 from isc.experiment import Experiment
 from isc.operations.loader import ModuleCodeError, load_callable
-from isc.manifest import Manifest
-from isc.runtime import Runtime
-from isc.workspace import Workspace
+from isc.lifecycle.manifest import Manifest
+from isc.lifecycle.runtime import Runtime
+from isc.lifecycle.workspace import Workspace
 
 Reporter = Callable[[str], None]
 

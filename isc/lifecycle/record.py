@@ -14,7 +14,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from isc.workspace import Workspace
+from isc.lifecycle.workspace import Workspace
 
 CSV_COLUMNS = [
     "run_id", "started_at", "module", "version", "target", "backend", "device",

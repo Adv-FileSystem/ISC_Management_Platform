@@ -21,17 +21,17 @@ from typing import Any
 from isc import bench as bench_module
 from isc import benchdata
 from isc import experiment as experiment_module
-from isc import record
+from isc.lifecycle import record
 from isc import report as report_module
 from isc.backends import backend_names, get_backend
-from isc.check import check_module
-from isc.devices import DeviceManager, WaitInfo, describe_wait
-from isc.events import (
+from isc.lifecycle.check import check_module
+from isc.lifecycle.devices import DeviceManager, WaitInfo, describe_wait
+from isc.lifecycle.events import (
     describe_event, events_path, follow, format_clock, list_runs, read_events, summarize,
 )
 from isc.experiment import ExperimentError
-from isc.lifecycle import revalidate, run as run_module, run_build
-from isc.manifest import ManifestError
+from isc.lifecycle.orchestrator import revalidate, run as run_module, run_build
+from isc.lifecycle.manifest import ManifestError
 from isc.operations import (
     get_operation, get_profile, operations as catalog_operations,
     parse_parameter_assignments, profiles as catalog_profiles,
@@ -40,7 +40,7 @@ from isc.generator.scaffold import (
     create_hook_module, create_module, create_module_from_logic, is_logic_file,
     render_profile_starter,
 )
-from isc.workspace import Workspace
+from isc.lifecycle.workspace import Workspace
 
 
 PROGRESS_HELP = "print each stage and its progress to stderr while it runs"
