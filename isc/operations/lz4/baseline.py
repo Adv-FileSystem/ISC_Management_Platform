@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import struct
 
-from isc.baseline import BaselineUnavailable
+from isc.operations.baseline import BaselineUnavailable
 
 HEADER = struct.Struct("<III")
 FLAG_LZ4 = 0

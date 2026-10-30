@@ -7,12 +7,12 @@ format has its own tests.
 """
 from __future__ import annotations
 
-from isc.baseline import BaselineUnavailable
+from isc.operations.baseline import BaselineUnavailable
 from topk_format import HEADER, check, pack
 
 BLOCK_ROWS = 1 << 16
 
-# What `isc check` feeds the baseline to see that it runs (isc.baseline.probe_input): a valid input
+# What `isc check` feeds the baseline to see that it runs (isc.operations.baseline.probe_input): a valid input
 # of 3 rows and 4 dimensions. Without it the probe would send bytes this format rejects.
 PROBE_INPUT = HEADER.pack(3, 4) + bytes([1, 2, 3, 4]) + bytes([1, 0, 0, 0]) \
     + bytes([0, 0, 0, 5]) + bytes([255, 255, 255, 255])

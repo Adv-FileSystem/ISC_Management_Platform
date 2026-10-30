@@ -10,10 +10,10 @@ import re
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from isc import baseline as baseline_module
+from isc.operations import baseline as baseline_module
 from isc.backends import backend_names
 from isc.generate import TODO_MARKER, strip_comments
-from isc.loader import ModuleCodeError, load_file
+from isc.operations.loader import ModuleCodeError, load_file
 from isc.manifest import Manifest, ManifestError
 
 

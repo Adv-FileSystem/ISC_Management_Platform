@@ -28,14 +28,14 @@ from typing import Any, Callable
 
 import json
 
-from isc import baseline as baseline_module
+from isc.operations import baseline as baseline_module
 from isc import benchdata, record
 from isc.backends import BackendError
 from isc.build import build
 from isc.devices import Owner, WaitInfo, describe_wait
 from isc.events import RunEvents, Sink, start_run
 from isc.experiment import Experiment
-from isc.loader import ModuleCodeError, load_callable
+from isc.operations.loader import ModuleCodeError, load_callable
 from isc.manifest import Manifest
 from isc.runtime import Runtime
 from isc.workspace import Workspace

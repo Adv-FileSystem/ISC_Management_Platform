@@ -24,13 +24,13 @@ from pathlib import Path
 from typing import Any, Callable
 
 from isc import record
-from isc.baseline import BaselineUnavailable, compute as compute_baseline
+from isc.operations.baseline import BaselineUnavailable, compute as compute_baseline
 from isc.backends import BackendError
 from isc.build import BuildResult, build, ensure_target_declared
 from isc.check import check_module
 from isc.devices import Owner, WaitInfo
 from isc.events import RunEvents, Sink, silent, start_run
-from isc.loader import ModuleCodeError, load_callable
+from isc.operations.loader import ModuleCodeError, load_callable
 from isc.manifest import Manifest
 from isc.runtime import Runtime
 from isc.validate import ValidationResult, validate
