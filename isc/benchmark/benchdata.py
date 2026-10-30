@@ -13,7 +13,7 @@ import random
 import re
 from pathlib import Path
 
-from isc.workspace import Workspace
+from isc.lifecycle.workspace import Workspace
 
 FILL_MODES = ("text", "random", "zeros")
 DEFAULT_FILL = "text"

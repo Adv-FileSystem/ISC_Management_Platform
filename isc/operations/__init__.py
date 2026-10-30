@@ -11,10 +11,10 @@ from typing import Any
 
 import yaml
 
-from isc.elements import ELEMENTS
+from isc.operations.elements import ELEMENTS
 
 
-OPERATIONS_DIR = Path(__file__).parent / "operations"
+OPERATIONS_DIR = Path(__file__).parent
 
 # 이름이 바뀐 프로파일의 옛 이름. 옛 module.yaml 이 계속 읽히도록 정준 id 로 풀어 준다.
 PROFILE_ALIASES = {"table_filter_u32": "filter"}

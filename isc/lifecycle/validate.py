@@ -5,14 +5,14 @@ Two validation modes, both a byte-for-byte comparison against a reference:
 - `cross_target`: re-execute the same input on the module's reference target
   (module.yaml: validation.reference_target, normally hw_emu). sw_emu was
   removed in Vitis 2025.1, so it is never a usable reference target -- see
-  isc/check.py.
+  isc/lifecycle/check.py.
 - `cpu_baseline`: compare against the operation's CPU reference implementation
-  (isc/baseline.py). Far cheaper than a hw_emu run, but only meaningful where
+  (isc/operations/baseline.py). Far cheaper than a hw_emu run, but only meaningful where
   the CPU result is the *only* correct answer -- the operation must declare
   `baseline.equivalence: exact`.
 
 Running the module on the reference target itself has nothing to compare
-against, so that case always passes; isc/lifecycle.py is what decides whether
+against, so that case always passes; isc/lifecycle/orchestrator.py is what decides whether
 a reference execution is needed and supplies its output here.
 """
 from __future__ import annotations

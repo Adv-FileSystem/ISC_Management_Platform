@@ -20,7 +20,7 @@ from typing import Callable
 from isc.backends.base import (
     Backend, BackendError, BuildOutput, BuildProgress, BuildRequest, Buffer, DeviceInfo, Session,
 )
-from isc.manifest import Manifest
+from isc.lifecycle.manifest import Manifest
 
 # `v++ --version` greets every invocation with a wall-clock line; it must not
 # reach the build cache key or no build would ever be reused.

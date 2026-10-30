@@ -15,10 +15,10 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from isc.backends import Backend, BackendError, BuildRequest, get_backend
-from isc.buildwatch import BuildWatch
-from isc.generate import render_kernel
-from isc.manifest import Manifest
-from isc.workspace import Workspace
+from isc.lifecycle.buildwatch import BuildWatch
+from isc.generator.generate import render_kernel
+from isc.lifecycle.manifest import Manifest
+from isc.lifecycle.workspace import Workspace
 
 CACHE_SCHEMA = 2
 
@@ -84,7 +84,7 @@ def ensure_target_declared(manifest: Manifest, target: str) -> None:
 def build(workspace: Workspace, manifest: Manifest, target: str, *,
           force: bool = False, timeout_seconds: float | None = None,
           stage=None) -> BuildResult:
-    """`stage` (a StageHandle) is told how the build moves; see isc/buildwatch.py."""
+    """`stage` (a StageHandle) is told how the build moves; see isc/lifecycle/buildwatch.py."""
     ensure_target_declared(manifest, target)
     backend = get_backend(manifest.backend)
     key = fingerprint(manifest, backend, target)

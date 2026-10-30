@@ -1,7 +1,7 @@
 """The vendor seam.
 
 Everything vendor-specific -- the build toolchain AND the device runtime --
-lives behind these types. Core (isc/lifecycle.py, isc/build.py, isc/cli.py)
+lives behind these types. Core (isc/lifecycle/orchestrator.py, isc/lifecycle/build.py, isc/cli.py)
 must never import a vendor SDK or mention xclbin/HBM/v++ directly.
 
 Adding a vendor = adding one module under isc/backends/ that subclasses
@@ -16,7 +16,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable, Iterator
 
-from isc.manifest import Manifest
+from isc.lifecycle.manifest import Manifest
 
 
 class BackendError(RuntimeError):

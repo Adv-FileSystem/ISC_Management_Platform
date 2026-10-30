@@ -1,4 +1,4 @@
-"""Workspace layout and module discovery (device reservation lives in isc/devices.py).
+"""Workspace layout and module discovery (device reservation lives in isc/lifecycle/devices.py).
 
     <root>/modules/<id>/module.yaml     modules the user writes
     <root>/artifacts/cache/<fp>/        build outputs, reused across runs
@@ -17,7 +17,7 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Iterator
 
-from isc.manifest import MANIFEST_NAME, Manifest
+from isc.lifecycle.manifest import MANIFEST_NAME, Manifest
 
 
 @contextmanager

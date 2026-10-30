@@ -8,12 +8,12 @@ from typing import Any, Callable
 
 import yaml
 
-from isc.generate import HookTypes, SignatureError, parse_signature, render_starter, strip_comments
-from isc.manifest import Manifest
+from isc.generator.generate import HookTypes, SignatureError, parse_signature, render_starter, strip_comments
+from isc.lifecycle.manifest import Manifest
 from isc.operations import (
     OperationSpec, canonical_profile_id, get_operation, get_profile, profiles,
 )
-from isc.workspace import Workspace
+from isc.lifecycle.workspace import Workspace
 
 _VALID_ID = re.compile(r"^[a-z][a-z0-9_]*$")
 

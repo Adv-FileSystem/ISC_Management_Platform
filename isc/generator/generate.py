@@ -11,7 +11,7 @@ import string
 from dataclasses import dataclass
 from typing import Any
 
-from isc.elements import ELEMENTS, TypeUse, lookup, spellings_for
+from isc.operations.elements import ELEMENTS, TypeUse, lookup, spellings_for
 
 TODO_MARKER = "ISC-TODO"
 

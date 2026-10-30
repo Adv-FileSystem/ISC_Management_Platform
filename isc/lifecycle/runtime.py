@@ -4,7 +4,7 @@ reserve -> enter the image directory -> open (timed) -> hand the session out ->
 close -> leave the directory -> release. `isc run` and `isc bench` both go through
 here, so the order cannot drift between them, and it is undone on every path out.
 
-Given a stream (isc/events.py) it also reports the two slow steps as stages: `device_wait`
+Given a stream (isc/lifecycle/events.py) it also reports the two slow steps as stages: `device_wait`
 (progress while someone else holds the device) and `device_open`.
 
 Adapter loading stays with the callers: the runtime knows how to open a device,
@@ -20,10 +20,10 @@ from typing import Callable, Iterator
 
 from isc.backends import get_backend
 from isc.backends.base import DeviceInfo, Session
-from isc.devices import DeviceManager, Owner, WaitInfo, describe_wait
-from isc.events import RunEvents, silent
-from isc.manifest import Manifest
-from isc.workspace import Workspace, working_directory
+from isc.lifecycle.devices import DeviceManager, Owner, WaitInfo, describe_wait
+from isc.lifecycle.events import RunEvents, silent
+from isc.lifecycle.manifest import Manifest
+from isc.lifecycle.workspace import Workspace, working_directory
 
 
 @dataclass(frozen=True)

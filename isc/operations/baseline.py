@@ -20,7 +20,7 @@ import time
 from dataclasses import dataclass, field
 from typing import Any, Callable
 
-from isc.loader import ModuleCodeError, load_callable, load_file
+from isc.operations.loader import ModuleCodeError, load_callable, load_file
 from isc.operations import BASELINE_FILENAME, OperationSpec
 
 

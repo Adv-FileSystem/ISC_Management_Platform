@@ -12,8 +12,8 @@ from typing import Any
 
 import yaml
 
-from isc.benchdata import DEFAULT_FILL, FILL_MODES, format_size, parse_size
-from isc.workspace import Workspace
+from isc.benchmark.benchdata import DEFAULT_FILL, FILL_MODES, format_size, parse_size
+from isc.lifecycle.workspace import Workspace
 
 EXPERIMENT_NAME = "experiment.yaml"
 SECTIONS = {"experiment", "matrix", "measure"}
