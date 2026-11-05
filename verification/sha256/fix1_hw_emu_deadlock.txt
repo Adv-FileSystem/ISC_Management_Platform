@@ -1,0 +1,15 @@
+# After fix 1 only (message order fixed, library dup_strm still pipelined): hw_emu build 9b39147b62fecb1c37eb56167e90fb1e
+# 100,000-byte run, source: artifacts/cache/9b39147b62fecb1c37eb56167e90fb1e/.run/494479/.../xsim/simulate.log
+// ERROR!!! DEADLOCK DETECTED at 253721000 ns! SIMULATION WILL BE STOPPED! //
+//////////////////////////////////////////////////////////////////////////////
+/////////////////////////
+// Dependence cycle 1:
+// (1): Process: isc_sha256_isc_sha256.grp_p_anonymous_namespace_sha256MemoryMapped_fu_80.sha256_32_U0.grp_sha256_top_32_256_s_fu_22.generateMsgSchedule_U0
+//      Blocked by empty input FIFO 'isc_sha256_isc_sha256.grp_p_anonymous_namespace_sha256MemoryMapped_fu_80.sha256_32_U0.grp_sha256_top_32_256_s_fu_22.end_nblk_strm1_U' written by process 'isc_sha256_isc_sha256.grp_p_anonymous_namespace_sha256MemoryMapped_fu_80.sha256_32_U0.grp_sha256_top_32_256_s_fu_22.dup_strm_U0'
+// (2): Process: isc_sha256_isc_sha256.grp_p_anonymous_namespace_sha256MemoryMapped_fu_80.sha256_32_U0.grp_sha256_top_32_256_s_fu_22.dup_strm_U0
+//      Blocked by empty input FIFO 'isc_sha256_isc_sha256.grp_p_anonymous_namespace_sha256MemoryMapped_fu_80.sha256_32_U0.grp_sha256_top_32_256_s_fu_22.end_nblk_strm_U' written by process 'isc_sha256_isc_sha256.grp_p_anonymous_namespace_sha256MemoryMapped_fu_80.sha256_32_U0.grp_sha256_top_32_256_s_fu_22.preProcessing_U0'
+// (3): Process: isc_sha256_isc_sha256.grp_p_anonymous_namespace_sha256MemoryMapped_fu_80.sha256_32_U0.grp_sha256_top_32_256_s_fu_22.preProcessing_U0
+//      Blocked by full output FIFO 'isc_sha256_isc_sha256.grp_p_anonymous_namespace_sha256MemoryMapped_fu_80.sha256_32_U0.grp_sha256_top_32_256_s_fu_22.blk_strm_U' read by process 'isc_sha256_isc_sha256.grp_p_anonymous_namespace_sha256MemoryMapped_fu_80.sha256_32_U0.grp_sha256_top_32_256_s_fu_22.generateMsgSchedule_U0'
+////////////////////////////////////////////////////////////////////////
+// Totally 1 cycles detected!
+////////////////////////////////////////////////////////////////////////

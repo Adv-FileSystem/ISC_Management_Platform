@@ -1,0 +1,14 @@
+# Before the fix: hw_emu build 998076816f6e4c80551ec796a17307dc (built 2026-11-05T11:06), input datasets/sha256/release.bin (100,000 bytes)
+# source: artifacts/cache/998076816f6e4c80551ec796a17307dc/.run/149498/.../xsim/simulate.log (run 2 of 2: .run/178558, same report)
+
+//////////////////////////////////////////////////////////////////////////////
+// ERROR!!! DEADLOCK DETECTED at 365216000 ns! SIMULATION WILL BE STOPPED! //
+//////////////////////////////////////////////////////////////////////////////
+/////////////////////////
+// Dependence cycle 1:
+// (1): Process: isc_sha256_isc_sha256.grp_p_anonymous_namespace_sha256MemoryMapped_fu_80.sha256_32_U0
+//      Blocked by empty input FIFO 'isc_sha256_isc_sha256.grp_p_anonymous_namespace_sha256MemoryMapped_fu_80.end_length_U' written by process 'isc_sha256_isc_sha256.grp_p_anonymous_namespace_sha256MemoryMapped_fu_80.p_anonymous_namespace_memoryToStream_U0'
+// (2): Process: isc_sha256_isc_sha256.grp_p_anonymous_namespace_sha256MemoryMapped_fu_80.p_anonymous_namespace_memoryToStream_U0
+--
+// Totally 1 cycles detected!
+////////////////////////////////////////////////////////////////////////
