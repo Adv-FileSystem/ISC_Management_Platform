@@ -13,14 +13,20 @@ void memoryToStream(const ap_uint<32>* in,
                     hls::stream<ap_uint<32> >& message,
                     hls::stream<ap_uint<64> >& length,
                     hls::stream<bool>& end_length) {
+    // xf::security::sha256 reads end_length, then length, and only then the
+    // message words. Send them in that order: writing the whole message first
+    // fills the message FIFO after 64 words (256 bytes) and the two dataflow
+    // processes wait on each other forever.
+    end_length.write(false);
+    length.write(input_size);
+    // The last word may be partial; the library ignores its unused bytes and the
+    // host pads the buffer to whole words, so this read stays in bounds.
     const uint64_t words = (input_size + 3) / 4;
 read_input:
     for (uint64_t i = 0; i < words; ++i) {
 #pragma HLS PIPELINE II = 1
         message.write(in[i]);
     }
-    length.write(input_size);
-    end_length.write(false);
     end_length.write(true);
 }
 
