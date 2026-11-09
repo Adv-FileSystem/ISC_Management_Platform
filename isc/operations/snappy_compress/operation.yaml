@@ -1,0 +1,56 @@
+operation:
+  id: snappy_compress
+  name: Snappy block compression (Vitis Data Compression)
+  version: "1.0"
+  category: compression
+  description: >-
+    임의 파일을 64 KiB 블록 단위 Snappy 로 압축합니다. Vitis Data Compression L2
+    xilSnappyCompress 커널(공식 소스 그대로)을 감싼 프로토타입 연산입니다.
+
+input:
+  representation: raw_bytes
+  formats: ["*"]
+  min_bytes: 1
+
+output:
+  representation: binary
+  # 블록마다 12바이트 헤더 (u32 raw_size, u32 stored_size, u32 flags: 0 = Snappy raw 블록, 1 = 원본) + 페이로드
+  format: isc_snappy_blocks
+  variable_size: true
+
+parameters: {}
+
+baseline:
+  # CPU Snappy 와 커널은 서로 다른(둘 다 올바른) 압축 바이트를 낼 수 있어 풀어서 원본과 비교한다.
+  equivalence: none
+  description: 순수 파이썬 Snappy 해제기(snappy_raw.py)로 풀어 원본과 비교
+
+runtime:
+  backend: xrt
+
+kernel:
+  name: xilSnappyCompress
+  source: kernel/snappy_kernel.cpp
+  include_dirs:
+    - ${VITIS_LIBRARIES}/data_compression/L1/include/hw
+    - ${VITIS_LIBRARIES}/data_compression/L2/include
+    - ${VITIS_LIBRARIES}/data_compression/L2/src
+  arguments:
+    - {name: in, kind: buffer, direction: in}
+    - {name: out, kind: buffer, direction: out}
+    - {name: compressd_size, kind: buffer, direction: out}
+    - {name: in_block_size, kind: buffer, direction: in}
+    - {name: block_size_in_kb, kind: scalar, direction: in}
+    - {name: input_size, kind: scalar, direction: in}
+  memory:
+    - {port: m_axi_gmem0, bank: 0}
+    - {port: m_axi_gmem1, bank: 1}
+
+build:
+  platform: xilinx_u50_gen3x16_xdma_5_202210_1
+  memory_type: HBM
+  targets: [hw_emu, hw]
+
+validation:
+  mode: cross_target
+  reference_target: hw_emu

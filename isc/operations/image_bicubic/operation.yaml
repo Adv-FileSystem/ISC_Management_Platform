@@ -1,0 +1,69 @@
+operation:
+  id: image_bicubic
+  name: Bicubic downscale (8-bit gray, Vitis Codec)
+  version: "1.0"
+  category: image
+  description: >-
+    8비트 회색조 영상을 bicubic 보간으로 축소합니다. Vitis Codec L2 resize 커널(resizeTop)을 감싼
+    프로토타입 연산입니다. 확대는 지원하지 않습니다.
+
+input:
+  representation: binary
+  # u32 rows, u32 cols, u8 pixels[rows][cols] (리틀 엔디안 헤더)
+  format: isc_gray8
+  min_bytes: 9
+
+output:
+  representation: binary
+  # u32 rows, u32 cols, u8 pixels[rows][cols]
+  format: isc_gray8
+  variable_size: true
+
+parameters:
+  out_rows:
+    type: integer
+    scope: host
+    description: 출력 높이 (입력 높이 이하)
+    default: 256
+    minimum: 1
+    maximum: 8192
+  out_cols:
+    type: integer
+    scope: host
+    description: 출력 너비 (입력 너비 이하)
+    default: 256
+    minimum: 1
+    maximum: 8192
+
+baseline:
+  # 공식 커널과 같은 소스를 CPU에서 C 시뮬레이션한 결과가 정답이다 (OpenCV INTER_CUBIC 과는
+  # 좌표 정렬·가중치 정의가 달라 바이트가 같지 않다). 플랫폼 기준선은 두지 않는다.
+  equivalence: none
+  description: 같은 커널 소스의 CPU C 시뮬레이션 (verification/u50_vitis_libraries/tools/csim/codec_resize_tb.cpp)
+
+runtime:
+  backend: xrt
+
+kernel:
+  name: isc_bicubic_resize
+  source: kernel/bicubic_kernel.cpp
+  include_dirs:
+    - ${VITIS_LIBRARIES}/codec/L2/include/hw/resize
+    - ${VITIS_LIBRARIES}/codec/L2/demos/resize/kernel
+  arguments:
+    - {name: configs, kind: buffer, direction: in}
+    - {name: src, kind: buffer, direction: in}
+    - {name: dst, kind: buffer, direction: out}
+  memory:
+    - {port: m_axi_gmem0, bank: 0}
+    - {port: m_axi_gmem1, bank: 1}
+    - {port: m_axi_gmem2, bank: 2}
+
+build:
+  platform: xilinx_u50_gen3x16_xdma_5_202210_1
+  memory_type: HBM
+  targets: [hw_emu, hw]
+
+validation:
+  mode: cross_target
+  reference_target: hw_emu

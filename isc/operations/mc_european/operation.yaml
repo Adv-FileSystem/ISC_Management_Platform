@@ -1,0 +1,69 @@
+operation:
+  id: mc_european
+  name: Monte Carlo European option pricing (Vitis Quantitative Finance)
+  version: "1.0"
+  category: finance
+  description: >-
+    유럽형 옵션 N건의 가격을 Monte Carlo 로 계산합니다. Vitis Quantitative Finance L2
+    MCEuropeanEngine 을 옵션마다 호출하는 프로토타입 연산입니다.
+
+input:
+  representation: binary
+  # u32 count, u32 reserved, f32 option[count][8] = S, K, sigma, q, r, T, type(0 콜, 1 풋), reserved
+  format: isc_mc_options_f32
+  min_bytes: 40
+
+output:
+  representation: binary
+  # f32 price[count]
+  format: isc_f32_vector
+  variable_size: true
+
+parameters:
+  samples:
+    type: integer
+    scope: host
+    description: 옵션 하나당 Monte Carlo 경로 수 (공식 테스트 값 40000)
+    default: 4096
+    minimum: 1024
+    maximum: 1048576
+  time_steps:
+    type: integer
+    scope: host
+    description: 경로당 시간 단계 수 (공식 테스트 값 1 또는 10)
+    default: 1
+    minimum: 1
+    maximum: 100
+
+baseline:
+  # Monte Carlo 는 근사값이라 해석해와 바이트가 같지 않다. 정확성 판정은 상대오차로 한다.
+  equivalence: none
+  description: Black-Scholes 해석해 (math.erf)
+
+runtime:
+  backend: xrt
+
+kernel:
+  name: isc_mc_european
+  source: kernel/mc_european_kernel.cpp
+  include_dirs:
+    - ${VITIS_LIBRARIES}/quantitative_finance/L1/include
+    - ${VITIS_LIBRARIES}/quantitative_finance/L2/include
+  arguments:
+    - {name: options, kind: buffer, direction: in}
+    - {name: prices, kind: buffer, direction: out}
+    - {name: count, kind: scalar, direction: in}
+    - {name: samples, kind: scalar, direction: in}
+    - {name: time_steps, kind: scalar, direction: in}
+  memory:
+    - {port: m_axi_gmem0, bank: 0}
+    - {port: m_axi_gmem1, bank: 1}
+
+build:
+  platform: xilinx_u50_gen3x16_xdma_5_202210_1
+  memory_type: HBM
+  targets: [hw_emu, hw]
+
+validation:
+  mode: cross_target
+  reference_target: hw_emu
