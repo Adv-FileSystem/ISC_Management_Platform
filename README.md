@@ -26,14 +26,44 @@ ISC가 제공하는 FPGA 연산으로 모듈을 만들고 **검사 → 빌드 �
 ## 지원 범위
 지원 범위에 대한 최신 정보는 `isc devices`, `isc operations`, `isc describe [연산 이름]`으로 확인합니다.
 
-| 지원 장치 | 지원 연산 | 종류 | 기능 |
-|---|---|---|---|
-| **AMD Alveo U50** | `adler32` / `crc32` | 내장 | 체크섬 |
-| | `sha256` | 내장 | 해시 |
-| | `identity` | 내장 | 복사 |
-| | `lz4` | 내장 | 블록 압축 |
-| | `vector_topk` | 내장 | 정수 내적 상위 k |
-| | `filter` / `map` / `aggregate` | Hook | 조건 필터 / 변환 / 조건부 집계 |
+지원 장치는 **AMD Alveo U50**입니다. 아래 표에서 하려는 작업(시나리오)을 찾고 연산 이름을 누르면, 그 시나리오를
+처음부터 끝까지 따라 하는 개발 절차(입력 만들기 → 모듈 생성 → 검사 → 실행 → 결과 확인 → 기록)로 이동합니다.
+
+검증은 두 가지로 나눠 기록합니다. 자세한 기록은 각 연산 문서의 7절에 있습니다.
+
+- **플랫폼 자체 테스트**: 이 플랫폼(`isc run`)으로 시나리오 입력을 U50에서 실행했습니다. ✅는 카드(`hw`) 출력이 hw_emu 출력과 바이트까지 같고, CPU 참조 계산(zlib, numpy, Python, C 시뮬레이션, Black-Scholes 해석해 등)과도 맞는다는 뜻입니다.
+- **공식 라이브러리 테스트**: 같은 연산의 Vitis Libraries 공식 테스트를 고치지 않고 U50에서 빌드·실행했습니다. ✅는 공식 테스트가 공식 정답(golden)과 비교해 통과했다는 뜻입니다. **입력은 공식 테스트에 들어 있는 데이터**이며 시나리오 데이터가 아닙니다. "— 해당 없음"은 대응하는 공식 테스트가 없는 플랫폼 전용 연산입니다.
+- 성능(가속 효과)은 이 표에서 다루지 않습니다.
+
+| 시나리오 (하려는 작업) | 연산 | 기반 라이브러리 | 개발 방식 | 사용자가 작성하는 것 | 플랫폼 자체 테스트 | 공식 라이브러리 테스트 |
+|---|---|---|---|---|---|---|
+| 설치 직후 FPGA 실행 경로(전송 → 커널 → 회수) 점검 | [`identity`](isc/operations/identity/README.md) | 플랫폼 자체 커널 | 연산 선택형 | 없음 | ⚠ main: 대조 실패 · 수정 브랜치: ✅ | — 해당 없음 |
+| 야간 백업 후 백업 파일이 깨지지 않았는지 CRC32로 확인 | [`crc32`](isc/operations/crc32/README.md) | Vitis Data Compression L1 | 연산 선택형 | 없음 | ✅ | ✅ |
+| 파일 동기화 도구의 블록별 Adler-32 체크섬 (rsync 방식) | [`adler32`](isc/operations/adler32/README.md) | Vitis Data Compression L1 | 연산 선택형 | 없음 | ✅ | ✅ |
+| 1분마다 쌓이는 접근 로그를 LZ4로 압축 보관 | [`lz4`](isc/operations/lz4/README.md) | Vitis Data Compression L1 | 연산 선택형 | 파라미터 `block_size` (선택) | ✅ | ✅ |
+| Kafka로 보내는 이벤트 메시지 묶음을 Snappy로 압축 | [`snappy_compress`](isc/operations/snappy_compress/README.md) | Vitis Data Compression L2 | 연산 선택형 | 없음 | ✅ | ✅ |
+| SNS "친구의 친구" 수를 세어 친구 추천 후보 점수로 사용 | [`graph_twohop`](isc/operations/graph_twohop/README.md) | Vitis Graph L2 | 연산 선택형 | 없음 | ✅ | ✅ |
+| 그래프 분석 전 원본 ID를 0부터 연속 번호로 바꾸기 | [`graph_renumber`](isc/operations/graph_renumber/README.md) | Vitis Graph L2 | 연산 선택형 | 없음 | ✅ | ✅ |
+| 쇼핑몰 상품 사진으로 고품질(bicubic) 썸네일 만들기 | [`image_bicubic`](isc/operations/image_bicubic/README.md) | Vitis Codec L2 | 연산 선택형 | 파라미터 `out_rows`, `out_cols` | ✅ | ✅ |
+| 보유 유럽형 옵션 가격을 매일 밤 Monte Carlo로 재계산 | [`mc_european`](isc/operations/mc_european/README.md) | Vitis Quantitative Finance L2 | 연산 선택형 | 파라미터 `samples`, `time_steps` (선택) | ✅ | ✅ |
+| 사내 문서 검색(RAG)에서 질의와 가장 가까운 문서 5개 찾기 | [`vector_topk`](isc/operations/vector_topk/README.md) | 플랫폼 자체 커널 | 연산 선택형 | 파라미터 `k`, `chunk_bytes` (선택) | ✅ | — 해당 없음 |
+| 매출 리포트용으로 금액 1,000~5,000원 주문만 추출 | [`filter`](isc/operations/filter/README.md) | 플랫폼 생성 래퍼 | Hook형 | 조건식 `return` 한 줄 | ✅ (`u32`) ⚠ | — 해당 없음 |
+| 공장 온도 센서 값(f32)을 0.5 °C 단위 1바이트 코드로 줄이기 | [`map`](isc/operations/map/README.md) | 플랫폼 생성 래퍼 | Hook형 | 변환식 `return` 한 줄 | ✅ (`f32→u8`) ⚠ | — 해당 없음 |
+| 1,000원 미만 소액 거래(환불 포함)의 건수·합계·최소·최대 | [`aggregate`](isc/operations/aggregate/README.md) | 플랫폼 생성 래퍼 | Hook형 | 조건식 `return` 한 줄 | ✅ (`i32`) | — 해당 없음 |
+
+- ⚠ `identity`: main의 커널은 hw_emu에서 일부 입력 길이(문서 예시 17바이트 포함)의 마지막 바이트를 `00`으로 돌려줘, 카드 출력이 정상이어도 플랫폼 대조가 실패로 기록됩니다. 수정은 브랜치 `fix/identity-hw-emu-last-byte`(커밋 `8b72302`)에 있고 아직 main에 합치지 않았습니다. ([자세히](isc/operations/identity/README.md))
+- ⚠ `map`·`filter`: 1바이트 타입(`u8`·`i8`)에서 hw_emu가 일부 길이(65·129)의 마지막 바이트를 잘못 처리합니다. 문서 예시(`f32→u8` 10,000개, `u32`)에는 해당하지 않습니다. ([map](isc/operations/map/README.md) · [filter](isc/operations/filter/README.md))
+- 새로 추가한 연산 5개(`snappy_compress`, `graph_twohop`, `graph_renumber`, `image_bicubic`, `mc_european`)는 공식 커널을 그대로 감싼 **프로토타입**이며 아직 커밋 전입니다.
+
+**검증 미완료 연산** — 연산 폴더는 있지만 두 테스트 중 하나가 끝나지 않아 위 표에서 뺐습니다.
+
+| 연산 | 시나리오 | 플랫폼 자체 테스트 | 공식 라이브러리 테스트 | 사유 |
+|---|---|---|---|---|
+| [`sha256`](isc/operations/sha256/README.md) | 배포 담당자가 올린 설치 패키지가 공개 다이제스트와 같은지 확인 | ⚠ main: 실패 · 수정 브랜치: ✅ | 미실행 | main 커널은 큰 입력에서 hw_emu 시뮬레이터가 종료되고 hw는 끝나지 않음. 교착을 고친 브랜치 `fix/sha256-dataflow-deadlock`에서 10개 크기 통과. U50용 공식 테스트 없음 |
+| `image_gaussian` | 문서 스캔 이미지의 잡음을 줄여 OCR 정확도 높이기 | ✅ | 미실행 | 공식 L2 테스트는 U50 미지원·OpenCV C++ 필요. 연산 문서 미작성, 커밋 전 |
+| `image_resize` | 학습 데이터 이미지를 모델 입력 크기로 일괄 축소 (bilinear) | ✅ | 미실행 | 위와 같음 |
+| `image_sobel` | 제조 라인 카메라 영상에서 부품 윤곽(에지) 뽑기 | ✅ | 미실행 | 위와 같음 |
+| `gemv_i32` | 대출 심사용 선형 점수 모델로 고객 점수 일괄 계산 | ✅ | 미실행 | 공식 문서가 가리키는 벤치마크가 저장소에 없음. 연산 문서 미작성, 커밋 전 |
 
 ## 목차
 
@@ -44,6 +74,7 @@ ISC가 제공하는 FPGA 연산으로 모듈을 만들고 **검사 → 빌드 �
 - [**5. 가속 효과 검증**](#5-가속-효과-검증)
 - [**6. 사용자 유의사항**](#6-사용자-유의사항)
 - [**7. 명령어 참고**](#7-명령어-참고)
+- [**8. 연산별 사용 예시 (Alveo U50)**](#8-연산별-사용-예시-alveo-u50)
 
 ## 1. 설치 및 환경 구성
 
@@ -58,9 +89,9 @@ isc doctor                         # 환경과 FPGA 카드 확인
 
 | 항목 | 요구 버전 |
 |---|---|
-| OS / 커널 | Ubuntu Server 22.04.1 LTS / `5.15.0-50-generic` (HWE 제외) |
+| OS / 커널 | Ubuntu 22.04 LTS / 검증 환경: 22.04.5 LTS, `6.8.0-138-generic` |
 | Python / PyYAML | `>= 3.10` / `>= 5.4` |
-| XRT / Vitis / Vitis Libraries | `2023.1` (`2.15.225`) / `2025.1` / `2025.1` |
+| XRT / Vitis / Vitis Libraries | `2025.1` (`2.19.194`) / `2025.1` / `2025.1` (검증: `v2025.1_update2`) |
 | FPGA / 개발 플랫폼 | AMD Alveo U50 / `xilinx_u50_gen3x16_xdma_5_202210_1` |
 | 장치 실행 패키지 | `xilinx-u50-gen3x16-xdma_2022.2_2022_1015_0317-all.deb.tar.gz` |
 | 빌드·에뮬레이션 패키지 | `xilinx-u50-gen3x16-xdma-5-202210-1-dev_1-3499627_all.deb` |
@@ -267,3 +298,45 @@ isc report [실험 이름]
 | `--progress` | `build`, `run`, `bench` | 진행 단계를 터미널에 출력 |
 
 나머지 옵션은 `isc [명령] --help`로 확인합니다.
+
+## 8. 연산별 사용 예시 (Alveo U50)
+
+연산마다 시나리오 하나를 처음부터 끝까지 따라 하는 예시를 그 연산의 폴더(`isc/operations/<연산>/README.md`)에 두었습니다.
+예시의 명령은 모두 **저장소 루트**에서 그대로 복사해 실행하며, 실습 파일은 git에 올라가지 않는 `datasets/` 아래에 만듭니다.
+예시에 실린 출력은 U50 환경에서 실제로 실행해 얻은 것입니다. 각 문서는 같은 순서로 되어 있습니다:
+1 시나리오 · 2 연산 요약 · 3 준비 · 4 개발 절차 · 5 내 데이터에 적용하기 · 6 문제 해결 · 7 검증 기록(7.1 플랫폼 자체 테스트, 7.2 공식 라이브러리 테스트).
+
+### 8.1. 개발 절차 한눈에 보기
+
+| 단계 | 연산 선택형 (`identity` `crc32` `adler32` `lz4` `snappy_compress` `graph_twohop` `graph_renumber` `image_bicubic` `mc_european` `vector_topk`) | Hook형 (`filter` `map` `aggregate`) |
+|---|---|---|
+| ① 연산 확인 | `isc describe <연산>`으로 입력 형식·파라미터 확인 | `isc describe-profile <프로파일>`로 함수 형태·타입 확인 |
+| ② 입력 만들기 | 연산의 입력 형식에 맞는 파일 (체크섬·압축은 아무 파일, 그래프·영상·옵션·임베딩은 문서에 정한 이진 형식) | 한 타입(`T`)의 값을 little-endian으로 이어 쓴 이진 파일 |
+| ③ 모듈 만들기 | `isc new <모듈> --operation <연산> [--set 파라미터=값]` → `modules/<모듈>/module.yaml` 생성 | `isc template <프로파일> --type T [--out-type U] -o <파일>.hpp` → **`return` 한 줄만** 수정 |
+| ④ 검사 | `isc check <모듈>` | `isc run <파일>.hpp`가 모듈 생성과 검사를 함께 함 |
+| ⑤ 에뮬레이션 실행 | `isc run <모듈> --input <입력> --output <출력>` (기본 `hw_emu`) | `isc run <파일>.hpp --input <입력> --output <출력>` |
+| ⑥ 결과 확인 | 예시의 Python 코드로 출력을 CPU 참조(zlib, numpy, 연산 폴더의 `baseline.py`, C 시뮬레이션 등)와 비교 | 예시의 Python 코드로 같은 조건·변환을 CPU에서 계산해 비교 |
+| ⑦ U50 실행 | ⑤와 같은 명령에 `--target hw` (hw_emu 기준 실행 → hw 빌드 → 카드 실행 → 두 출력 바이트 비교) | 같음 |
+| ⑧ 기록 확인 | `isc records --module <모듈>`, `isc show <실행 ID>` | 같음 |
+
+- ⑤의 `hw_emu` 실행은 자기 자신이 기준이라 플랫폼 검증이 항상 `PASS`로 표시됩니다(`ran on the reference target itself`). **로직이 맞는지는 ⑥에서 직접 확인**합니다.
+- ⑦의 플랫폼 검증은 `hw`와 `hw_emu` 출력이 같은지만 봅니다. 두 출력이 같아도 로직이 틀렸을 수 있으므로 ⑥의 비교를 hw 출력에도 한 번 더 적용합니다.
+- 처음 쓰는 연산·로직은 빌드가 필요합니다: `hw_emu` 수 분, `hw` 수십 분(이 서버에서 연산에 따라 약 45~70분). 같은 연산·파라미터·로직이면 캐시를 재사용해 바로 실행합니다. hw 빌드는 메모리를 많이 쓰므로 한 번에 하나씩 실행하는 것이 안전합니다.
+
+### 8.2. 연산별 예시 목록
+
+| 연산 | 예시 시나리오 | 만드는 모듈 | 사용자가 작성하는 파일 | 입력 → 출력 | 결과 확인 기준 |
+|---|---|---|---|---|---|
+| [`identity`](isc/operations/identity/README.md) | 설치 직후 실행 경로 점검 | `env_check` | 없음 | 텍스트 파일 → 같은 바이트 | `cmp`로 원본과 동일 |
+| [`crc32`](isc/operations/crc32/README.md) | 야간 백업 파일 손상 확인 | `backup_crc` | 없음 | 256 KiB 파일 → 4바이트 (big-endian) | `zlib.crc32`와 동일 |
+| [`adler32`](isc/operations/adler32/README.md) | 파일 동기화용 블록 체크섬 | `transfer_adler` | 없음 | 256 KiB 블록 → 4바이트 (big-endian) | `zlib.adler32`와 동일 |
+| [`lz4`](isc/operations/lz4/README.md) | 접근 로그 압축 보관 | `log_lz4` | 없음 (`block_size` 지정) | 로그 파일 → 블록 헤더 + LZ4 블록 | `lz4.block`으로 풀어 원본과 동일, 압축률 |
+| [`snappy_compress`](isc/operations/snappy_compress/README.md) | Kafka 이벤트 메시지 묶음 압축 | `kafka_snappy` | 없음 | 이벤트 묶음 200 KB → 블록 헤더 + Snappy 블록 | 풀어서 원본과 동일 (`check_output.py`) |
+| [`graph_twohop`](isc/operations/graph_twohop/README.md) | 친구의 친구 수로 추천 후보 점수 | `friend_2hop` | 없음 | 친구 1,000명 그래프 + 500쌍 → 쌍별 경로 수 | `baseline.py`와 동일 |
+| [`graph_renumber`](isc/operations/graph_renumber/README.md) | 원본 ID 연속 번호화 | `member_renumber` | 없음 | ID 5,000개 → 묶음 수 + 새 번호 | `baseline.py`와 동일, 일대일 대응 |
+| [`image_bicubic`](isc/operations/image_bicubic/README.md) | 상품 사진 썸네일 | `product_thumb` | 없음 (`out_rows`·`out_cols` 지정) | 512×512 회색조 → 256×256 | 같은 커널의 C 시뮬레이션과 동일 |
+| [`mc_european`](isc/operations/mc_european/README.md) | 보유 옵션 가격 재계산 | `option_book` | 없음 | 옵션 8건 → 가격 8개 | Black-Scholes 대비 `\|d\|/S` ≤ 1% (공식 판정식) |
+| [`vector_topk`](isc/operations/vector_topk/README.md) | 문서 임베딩 상위 5개 검색 | `doc_search` | 없음 (`k=5` 지정) | 2,000×64 int8 → `(id, score)` 5쌍 | numpy 내적·정렬과 동일 |
+| [`filter`](isc/operations/filter/README.md) | 금액 1,000 이상 5,000 미만 주문 추출 | `amount_filter` | `amount_filter.hpp` (`return` 한 줄) | u32 10,000개 → 조건을 만족한 u32 | Python 필터와 동일 |
+| [`map`](isc/operations/map/README.md) | 온도(f32)를 0.5 °C 단위 1바이트 코드로 변환 | `temp_code` | `temp_code.hpp` (`return` 한 줄) | f32 10,000개 → u8 10,000개 | Python 변환과 동일 |
+| [`aggregate`](isc/operations/aggregate/README.md) | 1,000 미만 거래(환불 포함)의 건수·합계·최소·최대 | `small_tx` | `small_tx.hpp` (`return` 한 줄) | i32 10,000개 → 32바이트 | Python 집계와 동일 |

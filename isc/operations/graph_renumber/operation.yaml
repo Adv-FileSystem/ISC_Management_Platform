@@ -1,0 +1,59 @@
+operation:
+  id: graph_renumber
+  name: Contiguous ID renumbering (Vitis Graph)
+  version: "1.0"
+  category: graph
+  description: >-
+    정점마다 붙은 묶음 번호(각 번호 < 정점 수)를 처음 나온 순서대로 0부터 연속 번호로 다시 매깁니다.
+    Vitis Graph L2 renumber 커널을 감싼 프로토타입 연산입니다.
+
+input:
+  representation: binary
+  # u32 N, i32 id[N] (0 <= id < N)
+  format: isc_i32_ids
+  min_bytes: 8
+
+output:
+  representation: binary
+  # u32 clusters, i32 new_id[N]
+  format: isc_renumbered_ids
+  variable_size: true
+
+parameters: {}
+
+baseline:
+  equivalence: exact
+  description: 처음 등장 순서로 번호 매기기 (공식 호스트 renumberClustersContiguously 와 같은 규칙)
+
+runtime:
+  backend: xrt
+
+kernel:
+  name: isc_renumber
+  source: kernel/renumber_kernel.cpp
+  include_dirs:
+    - ${VITIS_LIBRARIES}/graph/L2/include
+    - ${VITIS_LIBRARIES}/database/L1/include/hw
+    - ${VITIS_LIBRARIES}/quantitative_finance/L1/include
+    - ${VITIS_LIBRARIES}/utils/L1/include
+  arguments:
+    - {name: configs, kind: buffer, direction: inout}
+    - {name: old_ids, kind: buffer, direction: in}
+    - {name: map0, kind: buffer, direction: inout}
+    - {name: map1, kind: buffer, direction: inout}
+    - {name: new_ids, kind: buffer, direction: out}
+  memory:
+    - {port: m_axi_gmem0, bank: 8}
+    - {port: m_axi_gmem1, bank: 0}
+    - {port: m_axi_gmem2, bank: 2}
+    - {port: m_axi_gmem3, bank: 4}
+    - {port: m_axi_gmem4, bank: 6}
+
+build:
+  platform: xilinx_u50_gen3x16_xdma_5_202210_1
+  memory_type: HBM
+  targets: [hw_emu, hw]
+
+validation:
+  mode: cross_target
+  reference_target: hw_emu

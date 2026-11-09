@@ -1,0 +1,62 @@
+operation:
+  id: graph_twohop
+  name: Two-hop path count (Vitis Graph)
+  version: "1.0"
+  category: graph
+  description: >-
+    그래프(CSR)에서 정점 쌍마다 2-hop 경로(src → x → dst) 수를 셉니다. Vitis Graph L2 twoHop 을
+    감싼 프로토타입 연산입니다.
+
+input:
+  representation: binary
+  # u32 V, u32 E, u32 P, u32 reserved, u32 offset[V+1], u32 index[E], u32 pair[P][2] = (src, dst) 0부터
+  format: isc_csr_pairs
+  min_bytes: 28
+
+output:
+  representation: binary
+  # u32 count[P]
+  format: isc_u32_vector
+  variable_size: true
+
+parameters: {}
+
+baseline:
+  equivalence: exact
+  description: Python 이웃 목록 순회 (공식 golden 1000쌍과 일치 확인)
+
+runtime:
+  backend: xrt
+
+kernel:
+  name: isc_twohop
+  source: kernel/twohop_kernel.cpp
+  include_dirs:
+    - ${VITIS_LIBRARIES}/graph/L2/include
+    - ${VITIS_LIBRARIES}/database/L1/include/hw
+    - ${VITIS_LIBRARIES}/quantitative_finance/L1/include
+    - ${VITIS_LIBRARIES}/utils/L1/include
+  arguments:
+    - {name: num_pairs, kind: scalar, direction: in}
+    - {name: pair, kind: buffer, direction: in}
+    - {name: offset_one, kind: buffer, direction: in}
+    - {name: index_one, kind: buffer, direction: in}
+    - {name: offset_two, kind: buffer, direction: in}
+    - {name: index_two, kind: buffer, direction: in}
+    - {name: count, kind: buffer, direction: out}
+  memory:
+    - {port: m_axi_gmem0, bank: 0}
+    - {port: m_axi_gmem1, bank: 1}
+    - {port: m_axi_gmem2, bank: 2}
+    - {port: m_axi_gmem3, bank: 3}
+    - {port: m_axi_gmem4, bank: 4}
+    - {port: m_axi_gmem5, bank: 5}
+
+build:
+  platform: xilinx_u50_gen3x16_xdma_5_202210_1
+  memory_type: HBM
+  targets: [hw_emu, hw]
+
+validation:
+  mode: cross_target
+  reference_target: hw_emu
