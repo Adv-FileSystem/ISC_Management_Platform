@@ -8,8 +8,8 @@ ISC가 제공하는 FPGA 연산으로 모듈을 만들고 **검사 → 빌드 �
 
 | 개발 방식 | 사용자가 하는 일 | 제공 항목 |
 |---|---|---|
-| 연산 선택형 | 연산을 고르고 `module.yaml`의 파라미터 설정 | `adler32` `crc32` `identity` `lz4` `sha256` `vector_topk` |
-| Hook형 | 프로파일을 고르고 함수 하나의 `return` 줄 작성 | `filter` `map` `aggregate` |
+| 연산 선택형 | 연산을 고르고 `module.yaml`의 파라미터 설정 | Vitis Libraries 연산([지원 범위](#지원-범위) 1), 플랫폼 자체 연산 `identity` `vector_topk` |
+| Hook형 | 프로파일을 고르고 함수 하나의 `return` 줄 작성 | `filter` `map` `aggregate` ([지원 범위](#지원-범위) 2) |
 
 ```text
 [작업 디렉터리]/
@@ -26,44 +26,55 @@ ISC가 제공하는 FPGA 연산으로 모듈을 만들고 **검사 → 빌드 �
 ## 지원 범위
 지원 범위에 대한 최신 정보는 `isc devices`, `isc operations`, `isc describe [연산 이름]`으로 확인합니다.
 
-지원 장치는 **AMD Alveo U50**입니다. 아래 표에서 하려는 작업(시나리오)을 찾고 연산 이름을 누르면, 그 시나리오를
-처음부터 끝까지 따라 하는 개발 절차(입력 만들기 → 모듈 생성 → 검사 → 실행 → 결과 확인 → 기록)로 이동합니다.
+지원 장치는 **AMD Alveo U50**, 기반 라이브러리는 **AMD Vitis Libraries 2025.1**(`v2025.1_update2`)입니다.
+연산 이름을 누르면 그 연산의 세부 가이드(시나리오, 입력·출력 형식, 개발 절차, 문제 해결, 검증 기록)로 이동합니다.
 
-검증은 두 가지로 나눠 기록합니다. 자세한 기록은 각 연산 문서의 7절에 있습니다.
+검증은 두 가지로 나눠 기록합니다. 자세한 기록은 각 연산 문서의 7절에 있습니다. 성능(가속 효과)은 다루지 않습니다.
 
-- **플랫폼 자체 테스트**: 이 플랫폼(`isc run`)으로 시나리오 입력을 U50에서 실행했습니다. ✅는 카드(`hw`) 출력이 hw_emu 출력과 바이트까지 같고, CPU 참조 계산(zlib, numpy, Python, C 시뮬레이션, Black-Scholes 해석해 등)과도 맞는다는 뜻입니다.
-- **공식 라이브러리 테스트**: 같은 연산의 Vitis Libraries 공식 테스트를 고치지 않고 U50에서 빌드·실행했습니다. ✅는 공식 테스트가 공식 정답(golden)과 비교해 통과했다는 뜻입니다. **입력은 공식 테스트에 들어 있는 데이터**이며 시나리오 데이터가 아닙니다. "— 해당 없음"은 대응하는 공식 테스트가 없는 플랫폼 전용 연산입니다.
-- 성능(가속 효과)은 이 표에서 다루지 않습니다.
+- **플랫폼 자체 테스트**: 이 플랫폼(`isc run`)으로 시나리오 입력을 U50에서 실행했습니다. ✅는 카드(`hw`) 출력이 hw_emu 출력과 바이트까지 같고, CPU 참조 계산과도 맞는다는 뜻입니다.
+- **공식 라이브러리 테스트**: 같은 연산의 Vitis Libraries 공식 테스트를 고치지 않고 U50에서 빌드·실행했습니다. ✅는 공식 정답(golden)과 비교해 통과했다는 뜻입니다. **입력은 공식 테스트에 들어 있는 데이터**이며 시나리오 데이터가 아닙니다.
 
-| 시나리오 (하려는 작업) | 연산 | 기반 라이브러리 | 개발 방식 | 사용자가 작성하는 것 | 플랫폼 자체 테스트 | 공식 라이브러리 테스트 |
+### 1. Vitis Libraries 연산 (연산 선택형)
+
+| 라이브러리 | 연산 | 사용하는 라이브러리 함수 | 시나리오 | 플랫폼 자체 테스트 | 공식 라이브러리 테스트 |
+|---|---|---|---|---|---|
+| Data Compression L1 | [`lz4`](isc/operations/lz4/README.md) | `lzCompress` → `lzBestMatchFilter` → `lzBooster` → `lz4Compress` | 1분마다 쌓이는 접근 로그를 LZ4로 압축 보관 | ✅ | ✅ (`L2/tests/lz4_compress`) |
+| Data Compression L1 | [`crc32`](isc/operations/crc32/README.md) | `xf::compression::crc32_mm` | 야간 백업 후 백업 파일 손상 확인 | ✅ | ✅ (Security L1 `benchmarks/crc32`) |
+| Data Compression L1 | [`adler32`](isc/operations/adler32/README.md) | `xf::compression::adler32_mm` | 파일 동기화 도구의 블록별 체크섬 (rsync 방식) | ✅ | ✅ (Security L1 `benchmarks/adler32`) |
+| Data Compression L2 | [`snappy_compress`](isc/operations/snappy_compress/README.md) | `xilSnappyCompress` (공식 커널 소스 그대로) | Kafka로 보내는 이벤트 메시지 묶음 압축 | ✅ | ✅ (`L2/tests/snappy_compress`) |
+| Graph L2 | [`graph_twohop`](isc/operations/graph_twohop/README.md) | `xf::graph::twoHop` | SNS "친구의 친구" 수로 친구 추천 후보 점수 | ✅ | ✅ (`L2/tests/twoHop`) |
+| Graph L2 | [`graph_renumber`](isc/operations/graph_renumber/README.md) | `initRenumber` + `renumberCore` | 그래프 분석 전 원본 ID를 0부터 연속 번호로 | ✅ | ✅ (`L2/tests/renumber`) |
+| Codec L2 | [`image_bicubic`](isc/operations/image_bicubic/README.md) | `xf::codec::resizeTop` | 쇼핑몰 상품 사진으로 고품질 썸네일 생성 | ✅ | ✅ (`L2/demos/resize`) |
+| Quantitative Finance L2 | [`mc_european`](isc/operations/mc_european/README.md) | `xf::fintech::MCEuropeanEngine` | 보유 유럽형 옵션 가격 야간 Monte Carlo 재계산 | ✅ | ✅ (`L2/tests/MCEuropeanEngine`) |
+
+- `crc32`·`adler32`의 플랫폼 커널은 Data Compression L1 함수를 쓰고, 공식 라이브러리 테스트는 같은 계산의 Security L1 벤치마크를 돌렸습니다.
+- `snappy_compress`, `graph_twohop`, `graph_renumber`, `image_bicubic`, `mc_european`은 공식 커널을 그대로 감싼 **프로토타입**입니다.
+- `lz4`의 공식 라이브러리 테스트는 같은 태그의 로컬 클론에서 미리 빌드해 둔 이미지로 실행했습니다 ([자세히](isc/operations/lz4/README.md#72-공식-라이브러리-테스트)).
+
+**검증 미완료** — 연산 폴더는 있지만 두 테스트 중 하나가 끝나지 않았습니다.
+
+| 라이브러리 | 연산 | 사용하는 라이브러리 함수 | 시나리오 | 플랫폼 자체 테스트 | 공식 라이브러리 테스트 | 사유 |
 |---|---|---|---|---|---|---|
-| 설치 직후 FPGA 실행 경로(전송 → 커널 → 회수) 점검 | [`identity`](isc/operations/identity/README.md) | 플랫폼 자체 커널 | 연산 선택형 | 없음 | ⚠ main: 대조 실패 · 수정 브랜치: ✅ | — 해당 없음 |
-| 야간 백업 후 백업 파일이 깨지지 않았는지 CRC32로 확인 | [`crc32`](isc/operations/crc32/README.md) | Vitis Data Compression L1 | 연산 선택형 | 없음 | ✅ | ✅ |
-| 파일 동기화 도구의 블록별 Adler-32 체크섬 (rsync 방식) | [`adler32`](isc/operations/adler32/README.md) | Vitis Data Compression L1 | 연산 선택형 | 없음 | ✅ | ✅ |
-| 1분마다 쌓이는 접근 로그를 LZ4로 압축 보관 | [`lz4`](isc/operations/lz4/README.md) | Vitis Data Compression L1 | 연산 선택형 | 파라미터 `block_size` (선택) | ✅ | ✅ |
-| Kafka로 보내는 이벤트 메시지 묶음을 Snappy로 압축 | [`snappy_compress`](isc/operations/snappy_compress/README.md) | Vitis Data Compression L2 | 연산 선택형 | 없음 | ✅ | ✅ |
-| SNS "친구의 친구" 수를 세어 친구 추천 후보 점수로 사용 | [`graph_twohop`](isc/operations/graph_twohop/README.md) | Vitis Graph L2 | 연산 선택형 | 없음 | ✅ | ✅ |
-| 그래프 분석 전 원본 ID를 0부터 연속 번호로 바꾸기 | [`graph_renumber`](isc/operations/graph_renumber/README.md) | Vitis Graph L2 | 연산 선택형 | 없음 | ✅ | ✅ |
-| 쇼핑몰 상품 사진으로 고품질(bicubic) 썸네일 만들기 | [`image_bicubic`](isc/operations/image_bicubic/README.md) | Vitis Codec L2 | 연산 선택형 | 파라미터 `out_rows`, `out_cols` | ✅ | ✅ |
-| 보유 유럽형 옵션 가격을 매일 밤 Monte Carlo로 재계산 | [`mc_european`](isc/operations/mc_european/README.md) | Vitis Quantitative Finance L2 | 연산 선택형 | 파라미터 `samples`, `time_steps` (선택) | ✅ | ✅ |
-| 사내 문서 검색(RAG)에서 질의와 가장 가까운 문서 5개 찾기 | [`vector_topk`](isc/operations/vector_topk/README.md) | 플랫폼 자체 커널 | 연산 선택형 | 파라미터 `k`, `chunk_bytes` (선택) | ✅ | — 해당 없음 |
-| 매출 리포트용으로 금액 1,000~5,000원 주문만 추출 | [`filter`](isc/operations/filter/README.md) | 플랫폼 생성 래퍼 | Hook형 | 조건식 `return` 한 줄 | ✅ (`u32`) ⚠ | — 해당 없음 |
-| 공장 온도 센서 값(f32)을 0.5 °C 단위 1바이트 코드로 줄이기 | [`map`](isc/operations/map/README.md) | 플랫폼 생성 래퍼 | Hook형 | 변환식 `return` 한 줄 | ✅ (`f32→u8`) ⚠ | — 해당 없음 |
-| 1,000원 미만 소액 거래(환불 포함)의 건수·합계·최소·최대 | [`aggregate`](isc/operations/aggregate/README.md) | 플랫폼 생성 래퍼 | Hook형 | 조건식 `return` 한 줄 | ✅ (`i32`) | — 해당 없음 |
+| Security L1 | [`sha256`](isc/operations/sha256/README.md) | `xf::security::sha256` | 설치 패키지가 공개 다이제스트와 같은지 확인 | ⚠ main: 실패 · 수정 브랜치: ✅ | 미실행 | main 커널은 큰 입력에서 hw_emu가 종료되고 hw는 끝나지 않음. 브랜치 `fix/sha256-dataflow-deadlock`에서 10개 크기 통과. U50용 공식 테스트 없음 |
+| Vision L1 | `image_gaussian` | `GaussianBlur` | 문서 스캔 이미지의 잡음 제거 (OCR 전처리) | ✅ | 미실행 | 공식 L2 테스트는 U50 미지원·OpenCV C++ 필요. 세부 문서 미작성, 커밋 전 |
+| Vision L1 | `image_resize` | `resize` (bilinear) | 학습 데이터 이미지를 모델 입력 크기로 일괄 축소 | ✅ | 미실행 | 위와 같음 |
+| Vision L1 | `image_sobel` | `Sobel` | 제조 라인 영상에서 부품 윤곽(에지) 추출 | ✅ | 미실행 | 위와 같음 |
+| BLAS L1 | `gemv_i32` | `gemv` | 대출 심사용 선형 점수 모델로 고객 점수 일괄 계산 | ✅ | 미실행 | 공식 문서가 가리키는 벤치마크가 저장소에 없음. 세부 문서 미작성, 커밋 전 |
+
+### 2. 플랫폼 자체 연산 (Vitis Libraries 아님)
+
+Vitis Libraries에 대응하는 연산이 없어 공식 라이브러리 테스트는 **해당 없음**입니다.
+
+| 종류 | 연산 | 개발 방식 | 사용자가 작성하는 것 | 시나리오 | 플랫폼 자체 테스트 |
+|---|---|---|---|---|---|
+| Hook 프로파일 | [`filter`](isc/operations/filter/README.md) | Hook형 | 조건식 `return` 한 줄 | 매출 리포트용으로 금액 1,000~5,000원 주문만 추출 | ✅ (`u32`) ⚠ |
+| Hook 프로파일 | [`map`](isc/operations/map/README.md) | Hook형 | 변환식 `return` 한 줄 | 공장 온도 센서 값(f32)을 0.5 °C 단위 1바이트 코드로 | ✅ (`f32→u8`) ⚠ |
+| Hook 프로파일 | [`aggregate`](isc/operations/aggregate/README.md) | Hook형 | 조건식 `return` 한 줄 | 1,000원 미만 소액 거래(환불 포함)의 건수·합계·최소·최대 | ✅ (`i32`) |
+| 플랫폼 커널 | [`vector_topk`](isc/operations/vector_topk/README.md) | 연산 선택형 | 없음 (`k`, `chunk_bytes` 선택) | 사내 문서 검색(RAG)에서 가장 가까운 문서 5개 | ✅ |
+| 플랫폼 커널 | [`identity`](isc/operations/identity/README.md) | 연산 선택형 | 없음 | 설치 직후 FPGA 실행 경로 점검 | ⚠ main: 대조 실패 · 수정 브랜치: ✅ |
 
 - ⚠ `identity`: main의 커널은 hw_emu에서 일부 입력 길이(문서 예시 17바이트 포함)의 마지막 바이트를 `00`으로 돌려줘, 카드 출력이 정상이어도 플랫폼 대조가 실패로 기록됩니다. 수정은 브랜치 `fix/identity-hw-emu-last-byte`(커밋 `8b72302`)에 있고 아직 main에 합치지 않았습니다. ([자세히](isc/operations/identity/README.md))
-- ⚠ `map`·`filter`: 1바이트 타입(`u8`·`i8`)에서 hw_emu가 일부 길이(65·129)의 마지막 바이트를 잘못 처리합니다. 문서 예시(`f32→u8` 10,000개, `u32`)에는 해당하지 않습니다. ([map](isc/operations/map/README.md) · [filter](isc/operations/filter/README.md))
-- 새로 추가한 연산 5개(`snappy_compress`, `graph_twohop`, `graph_renumber`, `image_bicubic`, `mc_european`)는 공식 커널을 그대로 감싼 **프로토타입**이며 아직 커밋 전입니다.
-
-**검증 미완료 연산** — 연산 폴더는 있지만 두 테스트 중 하나가 끝나지 않아 위 표에서 뺐습니다.
-
-| 연산 | 시나리오 | 플랫폼 자체 테스트 | 공식 라이브러리 테스트 | 사유 |
-|---|---|---|---|---|
-| [`sha256`](isc/operations/sha256/README.md) | 배포 담당자가 올린 설치 패키지가 공개 다이제스트와 같은지 확인 | ⚠ main: 실패 · 수정 브랜치: ✅ | 미실행 | main 커널은 큰 입력에서 hw_emu 시뮬레이터가 종료되고 hw는 끝나지 않음. 교착을 고친 브랜치 `fix/sha256-dataflow-deadlock`에서 10개 크기 통과. U50용 공식 테스트 없음 |
-| `image_gaussian` | 문서 스캔 이미지의 잡음을 줄여 OCR 정확도 높이기 | ✅ | 미실행 | 공식 L2 테스트는 U50 미지원·OpenCV C++ 필요. 연산 문서 미작성, 커밋 전 |
-| `image_resize` | 학습 데이터 이미지를 모델 입력 크기로 일괄 축소 (bilinear) | ✅ | 미실행 | 위와 같음 |
-| `image_sobel` | 제조 라인 카메라 영상에서 부품 윤곽(에지) 뽑기 | ✅ | 미실행 | 위와 같음 |
-| `gemv_i32` | 대출 심사용 선형 점수 모델로 고객 점수 일괄 계산 | ✅ | 미실행 | 공식 문서가 가리키는 벤치마크가 저장소에 없음. 연산 문서 미작성, 커밋 전 |
+- ⚠ `map`·`filter`: 1바이트 타입(`u8`·`i8`)에서 hw_emu가 일부 길이(65·129)의 마지막 바이트를 잘못 처리합니다. 문서 예시(`f32→u8`, `u32`)에는 해당하지 않습니다. ([map](isc/operations/map/README.md) · [filter](isc/operations/filter/README.md))
 
 ## 목차
 
@@ -325,18 +336,18 @@ isc report [실험 이름]
 
 ### 8.2. 연산별 예시 목록
 
-| 연산 | 예시 시나리오 | 만드는 모듈 | 사용자가 작성하는 파일 | 입력 → 출력 | 결과 확인 기준 |
+| 연산 (라이브러리) | 예시 시나리오 | 만드는 모듈 | 사용자가 작성하는 파일 | 입력 → 출력 | 결과 확인 기준 |
 |---|---|---|---|---|---|
-| [`identity`](isc/operations/identity/README.md) | 설치 직후 실행 경로 점검 | `env_check` | 없음 | 텍스트 파일 → 같은 바이트 | `cmp`로 원본과 동일 |
-| [`crc32`](isc/operations/crc32/README.md) | 야간 백업 파일 손상 확인 | `backup_crc` | 없음 | 256 KiB 파일 → 4바이트 (big-endian) | `zlib.crc32`와 동일 |
-| [`adler32`](isc/operations/adler32/README.md) | 파일 동기화용 블록 체크섬 | `transfer_adler` | 없음 | 256 KiB 블록 → 4바이트 (big-endian) | `zlib.adler32`와 동일 |
-| [`lz4`](isc/operations/lz4/README.md) | 접근 로그 압축 보관 | `log_lz4` | 없음 (`block_size` 지정) | 로그 파일 → 블록 헤더 + LZ4 블록 | `lz4.block`으로 풀어 원본과 동일, 압축률 |
-| [`snappy_compress`](isc/operations/snappy_compress/README.md) | Kafka 이벤트 메시지 묶음 압축 | `kafka_snappy` | 없음 | 이벤트 묶음 200 KB → 블록 헤더 + Snappy 블록 | 풀어서 원본과 동일 (`check_output.py`) |
-| [`graph_twohop`](isc/operations/graph_twohop/README.md) | 친구의 친구 수로 추천 후보 점수 | `friend_2hop` | 없음 | 친구 1,000명 그래프 + 500쌍 → 쌍별 경로 수 | `baseline.py`와 동일 |
-| [`graph_renumber`](isc/operations/graph_renumber/README.md) | 원본 ID 연속 번호화 | `member_renumber` | 없음 | ID 5,000개 → 묶음 수 + 새 번호 | `baseline.py`와 동일, 일대일 대응 |
-| [`image_bicubic`](isc/operations/image_bicubic/README.md) | 상품 사진 썸네일 | `product_thumb` | 없음 (`out_rows`·`out_cols` 지정) | 512×512 회색조 → 256×256 | 같은 커널의 C 시뮬레이션과 동일 |
-| [`mc_european`](isc/operations/mc_european/README.md) | 보유 옵션 가격 재계산 | `option_book` | 없음 | 옵션 8건 → 가격 8개 | Black-Scholes 대비 `\|d\|/S` ≤ 1% (공식 판정식) |
-| [`vector_topk`](isc/operations/vector_topk/README.md) | 문서 임베딩 상위 5개 검색 | `doc_search` | 없음 (`k=5` 지정) | 2,000×64 int8 → `(id, score)` 5쌍 | numpy 내적·정렬과 동일 |
-| [`filter`](isc/operations/filter/README.md) | 금액 1,000 이상 5,000 미만 주문 추출 | `amount_filter` | `amount_filter.hpp` (`return` 한 줄) | u32 10,000개 → 조건을 만족한 u32 | Python 필터와 동일 |
-| [`map`](isc/operations/map/README.md) | 온도(f32)를 0.5 °C 단위 1바이트 코드로 변환 | `temp_code` | `temp_code.hpp` (`return` 한 줄) | f32 10,000개 → u8 10,000개 | Python 변환과 동일 |
-| [`aggregate`](isc/operations/aggregate/README.md) | 1,000 미만 거래(환불 포함)의 건수·합계·최소·최대 | `small_tx` | `small_tx.hpp` (`return` 한 줄) | i32 10,000개 → 32바이트 | Python 집계와 동일 |
+| [`lz4`](isc/operations/lz4/README.md) (Data Compression) | 접근 로그 압축 보관 | `log_lz4` | 없음 (`block_size` 지정) | 로그 파일 → 블록 헤더 + LZ4 블록 | `lz4.block`으로 풀어 원본과 동일, 압축률 |
+| [`crc32`](isc/operations/crc32/README.md) (Data Compression) | 야간 백업 파일 손상 확인 | `backup_crc` | 없음 | 256 KiB 파일 → 4바이트 (big-endian) | `zlib.crc32`와 동일 |
+| [`adler32`](isc/operations/adler32/README.md) (Data Compression) | 파일 동기화용 블록 체크섬 | `transfer_adler` | 없음 | 256 KiB 블록 → 4바이트 (big-endian) | `zlib.adler32`와 동일 |
+| [`snappy_compress`](isc/operations/snappy_compress/README.md) (Data Compression) | Kafka 이벤트 메시지 묶음 압축 | `kafka_snappy` | 없음 | 이벤트 묶음 200 KB → 블록 헤더 + Snappy 블록 | 풀어서 원본과 동일 (`check_output.py`) |
+| [`graph_twohop`](isc/operations/graph_twohop/README.md) (Graph) | 친구의 친구 수로 추천 후보 점수 | `friend_2hop` | 없음 | 친구 1,000명 그래프 + 500쌍 → 쌍별 경로 수 | `baseline.py`와 동일 |
+| [`graph_renumber`](isc/operations/graph_renumber/README.md) (Graph) | 원본 ID 연속 번호화 | `member_renumber` | 없음 | ID 5,000개 → 묶음 수 + 새 번호 | `baseline.py`와 동일, 일대일 대응 |
+| [`image_bicubic`](isc/operations/image_bicubic/README.md) (Codec) | 상품 사진 썸네일 | `product_thumb` | 없음 (`out_rows`·`out_cols` 지정) | 512×512 회색조 → 256×256 | 같은 커널의 C 시뮬레이션과 동일 |
+| [`mc_european`](isc/operations/mc_european/README.md) (Quantitative Finance) | 보유 옵션 가격 재계산 | `option_book` | 없음 | 옵션 8건 → 가격 8개 | Black-Scholes 대비 `\|d\|/S` ≤ 1% (공식 판정식) |
+| [`filter`](isc/operations/filter/README.md) (플랫폼 Hook) | 금액 1,000 이상 5,000 미만 주문 추출 | `amount_filter` | `amount_filter.hpp` (`return` 한 줄) | u32 10,000개 → 조건을 만족한 u32 | Python 필터와 동일 |
+| [`map`](isc/operations/map/README.md) (플랫폼 Hook) | 온도(f32)를 0.5 °C 단위 1바이트 코드로 변환 | `temp_code` | `temp_code.hpp` (`return` 한 줄) | f32 10,000개 → u8 10,000개 | Python 변환과 동일 |
+| [`aggregate`](isc/operations/aggregate/README.md) (플랫폼 Hook) | 1,000 미만 거래(환불 포함)의 건수·합계·최소·최대 | `small_tx` | `small_tx.hpp` (`return` 한 줄) | i32 10,000개 → 32바이트 | Python 집계와 동일 |
+| [`vector_topk`](isc/operations/vector_topk/README.md) (플랫폼 커널) | 문서 임베딩 상위 5개 검색 | `doc_search` | 없음 (`k=5` 지정) | 2,000×64 int8 → `(id, score)` 5쌍 | numpy 내적·정렬과 동일 |
+| [`identity`](isc/operations/identity/README.md) (플랫폼 커널) | 설치 직후 실행 경로 점검 | `env_check` | 없음 | 텍스트 파일 → 같은 바이트 | `cmp`로 원본과 동일 |
