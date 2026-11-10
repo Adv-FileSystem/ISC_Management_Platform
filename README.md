@@ -4,11 +4,11 @@
 
 - ISC가 제공하는 FPGA 연산으로 모듈을 만들고 **검사 → 빌드 → 실행 → 검증 → 기록**하는 로컬 관리
 플랫폼입니다. 사용자는 HLS 커널, AXI 인터페이스, 메모리 뱅크, XRT 어댑터 작성 없이 원하는 연산을 작성하여 ISC 모듈을 개발할 수 있습니다. 
-- 모듈 개발 방식은 총 2가지로 제공되며, 사전 정의된 모듈을 선택하거나 원하는 연산의 프로파일을 선택하여 함수를 수정하는 Hook형으로 구분됩니다. 연산 선택형 중 사용자 함수 자리가 있는 연산(`graph_twohop` `image_bicubic` `image_sobel` `image_gaussian` `image_resize` `gemv_i32` `vector_topk`)은 라이브러리 함수 뒤에 사용자가 작성한 함수를 붙일 수 있습니다.
+- 모듈 개발 방식은 총 2가지로 제공되며, 사전 정의된 모듈을 선택하거나 원하는 연산의 프로파일을 선택하여 함수를 수정하는 Hook형으로 구분됩니다. 연산 선택형 중 사용자 함수 자리가 있는 연산(`graph_twohop` `image_bicubic` `image_sobel` `image_gaussian` `image_resize` `gemv_i32` `vector_topk` `mc_european` `lz4` `snappy_compress`)은 라이브러리 함수 뒤에 사용자가 작성한 함수를 붙일 수 있습니다.
 
 | 유형 | 개발 방식 | 제공 항목 |
 |---|---|---|
-| 연산 선택형 | 사전 정의된 연산을 선택하고 `module.yaml`의 파라미터 설정. 사용자 함수 자리가 있는 연산은 선택적으로 함수 하나의 `return` 줄 작성 | Vitis Libraries 연산([지원 범위](#지원-범위) 1), 플랫폼 자체 연산 `identity` `vector_topk`. 사용자 함수 자리: `graph_twohop` `image_bicubic` `image_sobel` `image_gaussian` `image_resize` `gemv_i32` `vector_topk` |
+| 연산 선택형 | 사전 정의된 연산을 선택하고 `module.yaml`의 파라미터 설정. 사용자 함수 자리가 있는 연산은 선택적으로 함수 하나의 `return` 줄 작성 | Vitis Libraries 연산([지원 범위](#지원-범위) 1), 플랫폼 자체 연산 `identity` `vector_topk`. 사용자 함수 자리: `graph_twohop` `image_bicubic` `image_sobel` `image_gaussian` `image_resize` `gemv_i32` `vector_topk` `mc_european` `lz4` `snappy_compress` |
 | Hook형 | 프로파일을 고르고 함수 하나의 `return` 줄 작성 | `filter` `map` `aggregate` ([지원 범위](#지원-범위) 2) |
 
 ## 디렉터리 구조
@@ -46,8 +46,8 @@ ISC_Management_Platform/
 ```text
 [작업 디렉터리]/
 ├── modules/                        # 사용자가 작성
-│   ├── compressor/                 # 연산 선택형: module.yaml, README.md
-│   └── clip_filter/                # Hook형: module.yaml, logic.hpp, README.md
+│   ├── compressor/                 # 연산 선택형: module.yaml
+│   └── clip_filter/                # Hook형: module.yaml, logic.hpp
 ├── experiments/
 │   └── [실험 이름]/experiment.yaml  # 가속 효과 검증 실험 정의 (isc plan이 생성)
 └── artifacts/                      # 플랫폼이 생성
@@ -76,14 +76,14 @@ ISC_Management_Platform/
 
 | 라이브러리 | 연산 | 사용하는 라이브러리 함수 | 사용 예시 | 플랫폼 자체 테스트 | 공식 라이브러리 테스트 | 검증 상태 · 사유 |
 |---|---|---|---|---|---|---|
-| [Data Compression L1](https://github.com/Xilinx/Vitis_Libraries/tree/v2025.1_update2/data_compression/L1) | [`lz4`](isc/operations/lz4/README.md) | `lzCompress` → `lzBestMatchFilter` → `lzBooster` → `lz4Compress` | 1분마다 쌓이는 접근 로그를 LZ4로 압축 보관 | ✅ | ✅ ([`L2/tests/lz4_compress`](https://github.com/Xilinx/Vitis_Libraries/tree/v2025.1_update2/data_compression/L2/tests/lz4_compress)) | 완료 |
+| [Data Compression L1](https://github.com/Xilinx/Vitis_Libraries/tree/v2025.1_update2/data_compression/L1) | [`lz4`](isc/operations/lz4/README.md) | `lzCompress` → `lzBestMatchFilter` → `lzBooster` → `lz4Compress` | 1분마다 쌓이는 접근 로그의 숫자를 가리고 LZ4로 압축 보관 (`isc_pre`) | ✅ | ✅ ([`L2/tests/lz4_compress`](https://github.com/Xilinx/Vitis_Libraries/tree/v2025.1_update2/data_compression/L2/tests/lz4_compress)) | 완료 |
 | [Data Compression L1](https://github.com/Xilinx/Vitis_Libraries/tree/v2025.1_update2/data_compression/L1) | [`crc32`](isc/operations/crc32/README.md) | `xf::compression::crc32_mm` | 데이터 레이크 적재 파일의 무결성 검사 (`zlib.crc32` 대체) | ✅ | ✅ ([Security L1 `benchmarks/crc32`](https://github.com/Xilinx/Vitis_Libraries/tree/v2025.1_update2/security/L1/benchmarks/crc32)) | 완료 |
 | [Data Compression L1](https://github.com/Xilinx/Vitis_Libraries/tree/v2025.1_update2/data_compression/L1) | [`adler32`](isc/operations/adler32/README.md) | `xf::compression::adler32_mm` | 파일 동기화 도구의 블록별 체크섬 (rsync 방식) | ✅ | ✅ ([Security L1 `benchmarks/adler32`](https://github.com/Xilinx/Vitis_Libraries/tree/v2025.1_update2/security/L1/benchmarks/adler32)) | 완료 |
-| [Data Compression L2](https://github.com/Xilinx/Vitis_Libraries/tree/v2025.1_update2/data_compression/L2) | [`snappy_compress`](isc/operations/snappy_compress/README.md) | `xilSnappyCompress` | Kafka로 보내는 이벤트 메시지 묶음 압축 | ✅ | ✅ ([`L2/tests/snappy_compress`](https://github.com/Xilinx/Vitis_Libraries/tree/v2025.1_update2/data_compression/L2/tests/snappy_compress)) | 완료 |
+| [Data Compression L2](https://github.com/Xilinx/Vitis_Libraries/tree/v2025.1_update2/data_compression/L2) | [`snappy_compress`](isc/operations/snappy_compress/README.md) | `xilSnappyCompress` | Kafka로 보내는 이벤트 메시지 묶음의 숫자를 가리고 압축 (`isc_pre`) | ✅ | ✅ ([`L2/tests/snappy_compress`](https://github.com/Xilinx/Vitis_Libraries/tree/v2025.1_update2/data_compression/L2/tests/snappy_compress)) | 완료 |
 | [Graph L2](https://github.com/Xilinx/Vitis_Libraries/tree/v2025.1_update2/graph/L2) | [`graph_twohop`](isc/operations/graph_twohop/README.md) | `xf::graph::twoHop` | 금융 이상거래 탐지: 계좌 쌍이 함께 쓴 기기 수 + 사용자 위험 규칙 (`isc_score`) | ✅ | ✅ ([`L2/tests/twoHop`](https://github.com/Xilinx/Vitis_Libraries/tree/v2025.1_update2/graph/L2/tests/twoHop)) | 완료 |
 | [Graph L2](https://github.com/Xilinx/Vitis_Libraries/tree/v2025.1_update2/graph/L2) | [`graph_renumber`](isc/operations/graph_renumber/README.md) | `initRenumber` + `renumberCore` | 그래프 분석 전 원본 ID를 0부터 연속 번호로 | ✅ | ✅ ([`L2/tests/renumber`](https://github.com/Xilinx/Vitis_Libraries/tree/v2025.1_update2/graph/L2/tests/renumber)) | 완료 |
 | [Codec L2](https://github.com/Xilinx/Vitis_Libraries/tree/v2025.1_update2/codec/L2) | [`image_bicubic`](isc/operations/image_bicubic/README.md) | `xf::codec::resizeTop` | 학습용 흑백 이미지를 모델 입력 크기로 축소 + 사용자 대비 보정 (`isc_post`) | ✅ | ✅ ([`L2/demos/resize`](https://github.com/Xilinx/Vitis_Libraries/tree/v2025.1_update2/codec/L2/demos/resize)) | 완료 |
-| [Quantitative Finance L2](https://github.com/Xilinx/Vitis_Libraries/tree/v2025.1_update2/quantitative_finance/L2) | [`mc_european`](isc/operations/mc_european/README.md) | `xf::fintech::MCEuropeanEngine` | 보유 유럽형 옵션 가격 야간 Monte Carlo 재계산 | ✅ | ✅ ([`L2/tests/MCEuropeanEngine`](https://github.com/Xilinx/Vitis_Libraries/tree/v2025.1_update2/quantitative_finance/L2/tests/MCEuropeanEngine)) | 완료 |
+| [Quantitative Finance L2](https://github.com/Xilinx/Vitis_Libraries/tree/v2025.1_update2/quantitative_finance/L2) | [`mc_european`](isc/operations/mc_european/README.md) | `xf::fintech::MCEuropeanEngine` | 보유 유럽형 옵션 가격 Monte Carlo 재계산 + 변동성 스트레스 시나리오 (`isc_volatility`) | ✅ | ✅ ([`L2/tests/MCEuropeanEngine`](https://github.com/Xilinx/Vitis_Libraries/tree/v2025.1_update2/quantitative_finance/L2/tests/MCEuropeanEngine)) | 완료 |
 | [Security L1](https://github.com/Xilinx/Vitis_Libraries/tree/v2025.1_update2/security/L1) | [`sha256`](isc/operations/sha256/README.md) | `xf::security::sha256` | 설치 패키지가 공개 다이제스트와 같은지 확인 | ⚠ main: 실패 · 수정 브랜치: ✅ | 미실행 | **미완료** — 공식 라이브러리 테스트가 검증 장치를 지원하지 않음 (플랫폼 자체 테스트는 통과) |
 | [Vision L1](https://github.com/Xilinx/Vitis_Libraries/tree/v2025.1_update2/vision/L1) | [`image_gaussian`](isc/operations/image_gaussian/README.md) | `GaussianBlur` | 문서 스캔 이미지의 잡음 제거 + 사용자 이진화 규칙 (`isc_post`) | ✅ | 미실행 | **미완료** — 공식 L2 테스트는 U50 미지원·OpenCV C++ 필요 |
 | [Vision L1](https://github.com/Xilinx/Vitis_Libraries/tree/v2025.1_update2/vision/L1) | [`image_resize`](isc/operations/image_resize/README.md) | `resize` (bilinear) | 학습 데이터 이미지를 모델 입력 크기로 축소 + 사용자 밝기 보정 (`isc_post`) | ✅ | 미실행 | **미완료** — `image_gaussian`과 같음 |
@@ -202,6 +202,9 @@ parameters:              # 수정 가능 (isc describe에 표시된 항목만)
 | `image_gaussian` | `uint8_t isc_post(uint8_t px)` | `xf::cv::GaussianBlur`가 흐리게 한 뒤 출력 화소마다 1번 |
 | `image_resize` | `uint8_t isc_post(uint8_t px)` | `xf::cv::resize`가 크기를 바꾼 뒤 출력 화소마다 1번 |
 | `gemv_i32` | `int32_t isc_decide(int32_t score)` | `xf::blas::gemv`가 고객(행)마다 점수를 계산한 뒤 1번. 반환값이 그 행의 출력 |
+| `mc_european` | `float isc_volatility(float sigma)` | `xf::fintech::MCEuropeanEngine`에 넘기기 직전 옵션마다 1번. 반환값이 엔진이 쓰는 변동성 |
+| `lz4` | `uint8_t isc_pre(uint8_t b)` | LZ4 압축 단계에 넘기기 직전 입력 바이트마다 1번. 반환값이 압축되는 바이트 |
+| `snappy_compress` | `uint8_t isc_pre(uint8_t b)` | `xilSnappyCompress`에 넘기기 직전 입력 바이트마다 1번. 반환값이 압축되는 바이트 |
 | `vector_topk` | `int32_t isc_score(uint32_t id, int32_t dot)` | 문서(행)마다 내적을 계산한 뒤, 순위를 매기기 전에 1번. `INT32_MIN`을 돌려주면 그 문서는 제외 |
 
 ```bash
@@ -420,14 +423,14 @@ isc report [실험 이름]
 
 | 연산 (라이브러리) | 예시 시나리오 | 만드는 모듈 | 사용자가 작성하는 파일 | 입력 → 출력 | 결과 확인 기준 |
 |---|---|---|---|---|---|
-| [`lz4`](isc/operations/lz4/README.md) (Data Compression) | 접근 로그 압축 보관 | `log_lz4` | 없음 (`block_size` 지정) | 로그 파일 → 블록 헤더 + LZ4 블록 | `lz4.block`으로 풀어 원본과 동일, 압축률 |
+| [`lz4`](isc/operations/lz4/README.md) (Data Compression) | 접근 로그 숫자 가림 + 압축 보관 | `log_lz4` | `logic.hpp` (`isc_pre`의 `return` 줄), `block_size` 지정 | 로그 파일 → 블록 헤더 + LZ4 블록 | `lz4.block`으로 풀어 원본에 같은 규칙을 적용한 값과 동일, 압축률 |
 | [`crc32`](isc/operations/crc32/README.md) (Data Compression) | 적재 파일 무결성 검사 | `lake_crc` | 없음 | 256 KiB 파일 → 4바이트 (big-endian) | `zlib.crc32`와 동일 |
 | [`adler32`](isc/operations/adler32/README.md) (Data Compression) | 파일 동기화용 블록 체크섬 | `transfer_adler` | 없음 | 256 KiB 블록 → 4바이트 (big-endian) | `zlib.adler32`와 동일 |
-| [`snappy_compress`](isc/operations/snappy_compress/README.md) (Data Compression) | Kafka 이벤트 메시지 묶음 압축 | `kafka_snappy` | 없음 | 이벤트 묶음 200 KB → 블록 헤더 + Snappy 블록 | 풀어서 원본과 동일 (`check_output.py`) |
+| [`snappy_compress`](isc/operations/snappy_compress/README.md) (Data Compression) | Kafka 이벤트 메시지 숫자 가림 + 압축 | `kafka_snappy` | `logic.hpp` (`isc_pre`의 `return` 줄) | 이벤트 묶음 200 KB → 블록 헤더 + Snappy 블록 | 풀어서 원본에 같은 규칙을 적용한 값과 동일 (`check_output.py`) |
 | [`graph_twohop`](isc/operations/graph_twohop/README.md) (Graph) | 금융 이상거래 탐지: 공유 기기 수로 위험 점수 | `fraud_link` | `logic.hpp` (`isc_score`의 `return` 줄) | 계좌 800·기기 1,200 그래프 + 500쌍 → 쌍별 위험 점수 | `baseline.py` 결과에 같은 규칙을 적용한 값과 동일 |
 | [`graph_renumber`](isc/operations/graph_renumber/README.md) (Graph) | 원본 ID 연속 번호화 | `member_renumber` | 없음 | ID 5,000개 → 묶음 수 + 새 번호 | `baseline.py`와 동일, 일대일 대응 |
 | [`image_bicubic`](isc/operations/image_bicubic/README.md) (Codec) | 학습 이미지 축소 + 대비 보정 | `train_resize` | `logic.hpp` (`isc_post`의 `return` 줄), `out_rows`·`out_cols` 지정 | 512×512 회색조 → 256×256 | 같은 커널의 C 시뮬레이션 결과에 같은 규칙을 적용한 값과 동일 |
-| [`mc_european`](isc/operations/mc_european/README.md) (Quantitative Finance) | 보유 옵션 가격 재계산 | `option_book` | 없음 | 옵션 8건 → 가격 8개 | Black-Scholes 대비 `\|d\|/S` ≤ 1% (공식 판정식) |
+| [`mc_european`](isc/operations/mc_european/README.md) (Quantitative Finance) | 보유 옵션 가격 재계산 + 변동성 스트레스 | `option_book` | `logic.hpp` (`isc_volatility`의 `return` 줄) | 옵션 8건 → 가격 8개 | 같은 규칙으로 바꾼 변동성의 Black-Scholes 대비 `\|d\|/S` ≤ 1% |
 | [`filter`](isc/operations/filter/README.md) (플랫폼 Hook) | 금액 1,000 이상 5,000 미만 주문 추출 | `amount_filter` | `amount_filter.hpp` (`return` 한 줄) | u32 10,000개 → 조건을 만족한 u32 | Python 필터와 동일 |
 | [`map`](isc/operations/map/README.md) (플랫폼 Hook) | 온도(f32)를 0.5 °C 단위 1바이트 코드로 변환 | `temp_code` | `temp_code.hpp` (`return` 한 줄) | f32 10,000개 → u8 10,000개 | Python 변환과 동일 |
 | [`aggregate`](isc/operations/aggregate/README.md) (플랫폼 Hook) | 1,000 미만 거래(환불 포함)의 건수·합계·최소·최대 | `small_tx` | `small_tx.hpp` (`return` 한 줄) | i32 10,000개 → 32바이트 | Python 집계와 동일 |
