@@ -1,0 +1,29 @@
+11-05 16:58:37 start vendor sec_adler32 (running 0, free 85 GB)
+11-05 17:06:38 start vendor sec_crc32 (running 1, free 74 GB)
+11-05 17:14:39 start vendor comp_gzip_hbm (running 2, free 64 GB)
+11-05 17:22:40 start vendor graph_renumber (running 3, free 51 GB)
+11-05 17:30:41 start vendor graph_merge (running 4, free 38 GB)
+11-05 17:52:15 vendor sec_adler32 finished: exit 0
+11-05 17:52:15 start vendor graph_sparse_sim (running 4, free 34 GB)
+11-05 18:30:22 vendor graph_renumber finished: exit 2
+11-05 18:31:22 vendor sec_crc32 finished: exit 2
+11-05 18:33:23 vendor graph_merge finished: exit 2
+11-05 18:33:53 vendor comp_gzip_hbm finished: exit 2
+11-05 20:45:51 start vendor graph_general_sim (running 4, free 34 GB)
+11-05 20:53:52 start vendor comp_snappy (running 3, free 77 GB)
+11-05 21:01:53 start vendor comp_libzso (running 4, free 40 GB)
+11-05 21:02:53 vendor comp_libzso finished: exit 2
+11-05 21:09:54 start vendor hpc_fcn (running 4, free 58 GB)
+11-05 22:20:03 vendor comp_snappy finished: exit 0
+11-05 22:20:03 start vendor graph_louvain (running 4, free 36 GB)
+11-05 22:49:07 start vendor db_gqe_join (running 4, free 40 GB)
+11-05 22:49:37 vendor db_gqe_join finished: exit 2
+11-05 22:57:07 start vendor db_gqe_bloom (running 4, free 33 GB)
+11-05 23:23:40 vendor db_gqe_bloom finished: exit 2
+11-05 23:55:14 vendor graph_general_sim finished: exit 0
+11-05 23:55:14 start vendor db_gqe_part (running 4, free 46 GB)
+11-05 23:55:44 vendor db_gqe_part finished: exit 2
+11-06 00:15:46 vendor hpc_fcn finished: exit 0
+11-06 00:43:19 vendor graph_louvain finished: exit 0
+11-06 10:13:40 vendor graph_sparse_sim finished: exit -15
+11-06 10:14:11 all builds done

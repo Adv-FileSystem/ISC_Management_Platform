@@ -1,0 +1,2 @@
+[build] db_gqe_join: exit 2 in 949.1s
+[build] da_dup_match: exit 2 in 966.7s

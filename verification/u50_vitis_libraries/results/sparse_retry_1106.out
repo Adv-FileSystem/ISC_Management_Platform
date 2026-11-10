@@ -1,0 +1,8 @@
+11-07 10:34:43 sparse solo build (free 85 GB)
+11-07 10:34:43 start vendor graph_sparse_sim (running 0, free 86 GB)
+11-07 12:32:53 vendor graph_sparse_sim finished: exit 0
+11-07 12:33:23 all builds done
+11-07 12:33:23 run graph_sparse_sim
+[run] graph_sparse_sim: exit 0 in 14.4s
+     Info: Test passed
+11-07 12:33:38 sparse solo done

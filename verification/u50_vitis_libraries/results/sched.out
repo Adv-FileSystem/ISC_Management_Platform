@@ -1,0 +1,28 @@
+11-04 16:51:20 adopt vendor comp_gzip_hbm
+11-04 16:51:20 adopt vendor qf_mc_european
+11-04 16:51:20 adopt vendor graph_twohop
+11-04 16:51:20 adopt vendor codec_resize
+11-04 16:54:21 adopted vendor qf_mc_european finished: exit 2
+11-04 16:55:08 restarted with --max-total 3 --min-free-gb 35 --gap-min 12 after the MCEuropeanEngine impl OOM kill
+11-04 16:55:16 adopt vendor comp_gzip_hbm
+11-04 16:55:16 adopt vendor graph_twohop
+11-04 16:55:16 adopt vendor codec_resize
+11-04 18:02:27 adopted vendor graph_twohop finished: exit 0
+11-04 18:02:27 start platform u50v_crc32 (running 2, free 58 GB)
+11-04 18:05:57 adopted vendor codec_resize finished: exit 0
+11-04 18:14:28 start platform u50v_gemv (running 2, free 69 GB)
+11-04 18:46:33 start platform u50v_gauss (running 2, free 60 GB)
+11-04 19:02:35 start platform u50v_resize_half (running 2, free 64 GB)
+11-04 19:31:09 start platform u50v_sobel (running 2, free 61 GB)
+11-04 19:48:12 start vendor db_gqe_join (running 2, free 67 GB)
+11-04 20:13:45 vendor db_gqe_join finished: exit 2
+11-04 20:13:45 start vendor da_dup_match (running 2, free 59 GB)
+11-04 20:25:46 start vendor qf_mc_european (running 2, free 72 GB)
+11-04 21:11:52 vendor qf_mc_european finished: exit 0
+11-04 21:11:52 start vendor codec_jpegdec (running 2, free 59 GB)
+11-04 22:22:01 vendor codec_jpegdec finished: exit 0
+11-04 22:22:01 start vendor db_gqe_part (running 2, free 47 GB)
+11-04 22:58:35 vendor db_gqe_part finished: exit 2
+11-04 22:58:35 start vendor sec_adler32 (running 2, free 47 GB)
+11-04 23:38:10 vendor da_dup_match finished: exit 0
+11-04 23:38:10 start vendor sec_crc32 (running 2, free 60 GB)

@@ -1,0 +1,5 @@
+# 로컬 전용: pip로 받은 외부 패키지(numpy, scipy, OpenCV), 생성 입력·출력, 원본 로그
+.pylib/
+inputs/*.bin
+outputs/
+logs/

@@ -1,0 +1,187 @@
+{
+ "note": "root=clean worktree of Vitis Libraries v2025.1_update2 (b2c657d) unless marked prebuilt; prebuilt = xclbin built 2026-08 in the local clone",
+ "jobs": [
+  {
+   "id": "db_gqe_join",
+   "library": "Database",
+   "operation": "GQE 3-in-1 hash join",
+   "root": "/home/hun/dev/workspace/vitis_libs_u50v",
+   "dir": "database/L2/tests/gqeJoin"
+  },
+  {
+   "id": "comp_gzip_hbm",
+   "library": "Data Compression",
+   "operation": "GZIP/ZLIB compress+decompress",
+   "root": "/home/hun/dev/workspace/vitis_libs_u50v",
+   "dir": "data_compression/L3/demos/gzip_hbm"
+  },
+  {
+   "id": "da_dup_match",
+   "library": "Data Analytics",
+   "operation": "Duplicate Record Match",
+   "root": "/home/hun/dev/workspace/vitis_libs_u50v",
+   "dir": "data_analytics/L2/demos/text/dup_match"
+  },
+  {
+   "id": "qf_mc_european",
+   "library": "Quantitative Finance",
+   "operation": "MCEuropeanEngine",
+   "root": "/home/hun/dev/workspace/vitis_libs_u50v",
+   "dir": "quantitative_finance/L2/tests/MCEuropeanEngine"
+  },
+  {
+   "id": "graph_twohop",
+   "library": "Graph",
+   "operation": "2-hop path count",
+   "root": "/home/hun/dev/workspace/vitis_libs_u50v",
+   "dir": "graph/L2/tests/twoHop"
+  },
+  {
+   "id": "codec_resize",
+   "library": "Codec",
+   "operation": "Bicubic resize",
+   "root": "/home/hun/dev/workspace/vitis_libs_u50v",
+   "dir": "codec/L2/demos/resize"
+  },
+  {
+   "id": "codec_jpegdec",
+   "library": "Codec",
+   "operation": "JPEG decoder",
+   "root": "/home/hun/dev/workspace/vitis_libs_u50v",
+   "dir": "codec/L2/demos/jpegDec"
+  },
+  {
+   "id": "db_gqe_part",
+   "library": "Database",
+   "operation": "GQE 3-in-1 hash partition",
+   "root": "/home/hun/dev/workspace/vitis_libs_u50v",
+   "dir": "database/L2/tests/gqePart"
+  },
+  {
+   "id": "sec_adler32",
+   "library": "Security",
+   "operation": "Adler-32",
+   "root": "/home/hun/dev/workspace/vitis_libs_u50v",
+   "dir": "security/L1/benchmarks/adler32"
+  },
+  {
+   "id": "sec_crc32",
+   "library": "Security",
+   "operation": "CRC32",
+   "root": "/home/hun/dev/workspace/vitis_libs_u50v",
+   "dir": "security/L1/benchmarks/crc32"
+  },
+  {
+   "id": "graph_renumber",
+   "library": "Graph",
+   "operation": "Renumber",
+   "root": "/home/hun/dev/workspace/vitis_libs_u50v",
+   "dir": "graph/L2/tests/renumber"
+  },
+  {
+   "id": "graph_merge",
+   "library": "Graph",
+   "operation": "Merge",
+   "root": "/home/hun/dev/workspace/vitis_libs_u50v",
+   "dir": "graph/L2/tests/merge"
+  },
+  {
+   "id": "graph_sparse_sim",
+   "library": "Graph",
+   "operation": "Cosine similarity (sparse)",
+   "root": "/home/hun/dev/workspace/vitis_libs_u50v",
+   "dir": "graph/L2/tests/sparse_similarity"
+  },
+  {
+   "id": "graph_general_sim",
+   "library": "Graph",
+   "operation": "Cosine similarity (general)",
+   "root": "/home/hun/dev/workspace/vitis_libs_u50v",
+   "dir": "graph/L2/tests/general_similarity"
+  },
+  {
+   "id": "graph_pagerank_mc",
+   "library": "Graph",
+   "operation": "PageRank multi-channel",
+   "root": "/home/hun/dev/workspace/vitis_libs_u50v",
+   "dir": "graph/L2/tests/pagerank_multi_channels"
+  },
+  {
+   "id": "comp_snappy",
+   "library": "Data Compression",
+   "operation": "Snappy compress",
+   "root": "/home/hun/dev/workspace/vitis_libs_u50v",
+   "dir": "data_compression/L2/tests/snappy_compress"
+  },
+  {
+   "id": "graph_louvain",
+   "library": "Graph",
+   "operation": "Louvain modularity",
+   "root": "/home/hun/dev/workspace/vitis_libs_u50v",
+   "dir": "graph/L2/tests/louvain_fast"
+  },
+  {
+   "id": "hpc_fcn",
+   "library": "HPC",
+   "operation": "FCN kernel",
+   "root": "/home/hun/dev/workspace/vitis_libs_u50v",
+   "dir": "hpc/L2/tests/mlp/fcn_1CU"
+  },
+  {
+   "id": "comp_libzso",
+   "library": "Data Compression",
+   "operation": "libz.so API (deflate/inflate)",
+   "root": "/home/hun/dev/workspace/vitis_libs_u50v",
+   "dir": "data_compression/L3/demos/libzso"
+  },
+  {
+   "id": "db_gqe_bloom",
+   "library": "Database",
+   "operation": "GQE 3-in-1 bloom filter",
+   "root": "/home/hun/dev/workspace/vitis_libs_u50v",
+   "dir": "database/L2/tests/gqeJoin_bloomfilter"
+  },
+  {
+   "id": "pre_graph_pagerank",
+   "library": "Graph",
+   "operation": "PageRank (prebuilt)",
+   "root": "/home/hun/dev/workspace/Vitis_Libraries_2025.1",
+   "dir": "graph/L2/benchmarks/pagerank"
+  },
+  {
+   "id": "pre_graph_dense_sim",
+   "library": "Graph",
+   "operation": "Cosine similarity dense (prebuilt)",
+   "root": "/home/hun/dev/workspace/Vitis_Libraries_2025.1",
+   "dir": "graph/L2/tests/dense_similarity"
+  },
+  {
+   "id": "pre_db_hash_join",
+   "library": "Database",
+   "operation": "L1 hash join v3 (prebuilt, 220 MHz)",
+   "root": "/home/hun/dev/workspace/Vitis_Libraries_2025.1",
+   "dir": "database/L1/benchmarks/hash_join_v3_sc"
+  },
+  {
+   "id": "pre_hpc_cg",
+   "library": "HPC",
+   "operation": "CG solver GEMV+Jacobi (prebuilt)",
+   "root": "/home/hun/dev/workspace/Vitis_Libraries_2025.1",
+   "dir": "hpc/L2/benchmarks/cg_gemv_jacobi",
+   "make_vars": [
+    "-f",
+    "Makefile",
+    "-f",
+    "params.mk"
+   ],
+   "note": "2025.1 Makefile does not include params.mk (host args + data_gen); added with -f"
+  },
+  {
+   "id": "pre_comp_lz4",
+   "library": "Data Compression",
+   "operation": "LZ4 compress (prebuilt)",
+   "root": "/home/hun/dev/workspace/Vitis_Libraries_2025.1",
+   "dir": "data_compression/L2/tests/lz4_compress"
+  }
+ ]
+}

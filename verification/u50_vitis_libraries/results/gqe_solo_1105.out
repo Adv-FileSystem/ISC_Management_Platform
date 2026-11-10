@@ -1,0 +1,16 @@
+11-06 13:18:20 solo build db_gqe_join (free 87 GB)
+[build] db_gqe_join: exit 0 in 20695.3s
+11-06 19:03:16 run db_gqe_join
+[run] db_gqe_join: exit 0 in 15.6s
+     Info: Test passed
+11-06 19:03:31 solo build db_gqe_bloom (free 83 GB)
+[build] db_gqe_bloom: exit 0 in 12438.2s
+11-06 22:30:50 run db_gqe_bloom
+[run] db_gqe_bloom: exit 0 in 15.0s
+     Info: Test passed
+11-06 22:31:05 solo build db_gqe_part (free 85 GB)
+[build] db_gqe_part: exit 0 in 43344.9s
+11-07 10:33:30 run db_gqe_part
+[run] db_gqe_part: exit 0 in 15.1s
+     Info: Test passed
+11-07 10:33:45 gqe solo done

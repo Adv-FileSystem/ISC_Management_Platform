@@ -1,0 +1,17 @@
+18:02:36 run graph_twohop
+[run] graph_twohop: exit 0 in 9.7s
+     Info: Test passed
+18:06:46 run codec_resize
+[run] codec_resize: exit 0 in 10.1s
+     PASS: no error found.
+     Info: Test passed
+21:12:07 run qf_mc_european
+[run] qf_mc_european: exit 0 in 9.1s
+     Info: Test passed
+22:22:20 run codec_jpegdec
+[run] codec_jpegdec: exit 2 in 9.0s
+     [XRT] ERROR: failed to allocate userptr bo: Operation not permitted
+     [XRT] ERROR: failed to allocate userptr bo: Operation not permitted
+     [XRT] ERROR: mem is nullptr
+23:38:33 run da_dup_match
+[run] da_dup_match: exit 0 in 13.2s
