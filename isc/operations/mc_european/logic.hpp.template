@@ -1,0 +1,16 @@
+// ISC 사용자 로직 — mc_european (Vitis Quantitative Finance L2 xf::fintech::MCEuropeanEngine)
+//
+// 호출 시점: 옵션마다 1번. 엔진(MCEuropeanEngine)에 넘기기 직전.
+// 입력: sigma = 그 옵션의 변동성 (입력 파일의 값, 예: 0.2 = 20%)
+// 출력: 엔진이 가격 계산에 쓸 변동성
+//
+// 고치는 곳: return 줄만. 함수 이름과 인자·반환 타입은 바꾸지 마십시오 (인자 이름은 자유).
+// 예)  return sigma * 1.2f;                       // 변동성 20% 상승 스트레스
+//      return sigma < 0.3f ? 0.3f : sigma;        // 변동성 하한 30%
+// 쓸 수 없는 것: 동적 할당, 파일 입출력, HLS INTERFACE 지시어. 다른 옵션의 값은 볼 수 없습니다.
+// 결과가 0 이하가 되지 않게 하십시오 (엔진은 양수 변동성만 받습니다).
+#pragma once
+
+inline float isc_volatility(float sigma) {
+    return sigma;   // ISC-TODO: 규칙으로 바꾸십시오 (지금은 원래 연산과 같은 결과)
+}
