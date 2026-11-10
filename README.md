@@ -4,11 +4,11 @@
 
 - ISC가 제공하는 FPGA 연산으로 모듈을 만들고 **검사 → 빌드 → 실행 → 검증 → 기록**하는 로컬 관리
 플랫폼입니다. 사용자는 HLS 커널, AXI 인터페이스, 메모리 뱅크, XRT 어댑터 작성 없이 원하는 연산을 작성하여 ISC 모듈을 개발할 수 있습니다. 
-- 모듈 개발 방식은 총 2가지로 제공되며, 사전 정의된 모듈을 선택하거나 원하는 연산의 프로파일을 선택하여 함수를 수정하는 Hook형으로 구분됩니다. 연산 선택형 중 사용자 함수 자리가 있는 연산(현재 `graph_twohop`)은 Vitis 라이브러리 함수 뒤에 사용자가 작성한 함수를 붙일 수 있습니다.
+- 모듈 개발 방식은 총 2가지로 제공되며, 사전 정의된 모듈을 선택하거나 원하는 연산의 프로파일을 선택하여 함수를 수정하는 Hook형으로 구분됩니다. 연산 선택형 중 사용자 함수 자리가 있는 연산(`graph_twohop` `image_bicubic` `image_sobel` `image_gaussian` `image_resize` `gemv_i32` `vector_topk`)은 라이브러리 함수 뒤에 사용자가 작성한 함수를 붙일 수 있습니다.
 
 | 유형 | 개발 방식 | 제공 항목 |
 |---|---|---|
-| 연산 선택형 | 사전 정의된 연산을 선택하고 `module.yaml`의 파라미터 설정. 사용자 함수 자리가 있는 연산은 선택적으로 함수 하나의 `return` 줄 작성 | Vitis Libraries 연산([지원 범위](#지원-범위) 1), 플랫폼 자체 연산 `identity` `vector_topk`. 사용자 함수 자리: `graph_twohop` |
+| 연산 선택형 | 사전 정의된 연산을 선택하고 `module.yaml`의 파라미터 설정. 사용자 함수 자리가 있는 연산은 선택적으로 함수 하나의 `return` 줄 작성 | Vitis Libraries 연산([지원 범위](#지원-범위) 1), 플랫폼 자체 연산 `identity` `vector_topk`. 사용자 함수 자리: `graph_twohop` `image_bicubic` `image_sobel` `image_gaussian` `image_resize` `gemv_i32` `vector_topk` |
 | Hook형 | 프로파일을 고르고 함수 하나의 `return` 줄 작성 | `filter` `map` `aggregate` ([지원 범위](#지원-범위) 2) |
 
 ## 디렉터리 구조
@@ -82,13 +82,13 @@ ISC_Management_Platform/
 | [Data Compression L2](https://github.com/Xilinx/Vitis_Libraries/tree/v2025.1_update2/data_compression/L2) | [`snappy_compress`](isc/operations/snappy_compress/README.md) | `xilSnappyCompress` | Kafka로 보내는 이벤트 메시지 묶음 압축 | ✅ | ✅ ([`L2/tests/snappy_compress`](https://github.com/Xilinx/Vitis_Libraries/tree/v2025.1_update2/data_compression/L2/tests/snappy_compress)) | 완료 |
 | [Graph L2](https://github.com/Xilinx/Vitis_Libraries/tree/v2025.1_update2/graph/L2) | [`graph_twohop`](isc/operations/graph_twohop/README.md) | `xf::graph::twoHop` | 금융 이상거래 탐지: 계좌 쌍이 함께 쓴 기기 수 + 사용자 위험 규칙 (`isc_score`) | ✅ | ✅ ([`L2/tests/twoHop`](https://github.com/Xilinx/Vitis_Libraries/tree/v2025.1_update2/graph/L2/tests/twoHop)) | 완료 |
 | [Graph L2](https://github.com/Xilinx/Vitis_Libraries/tree/v2025.1_update2/graph/L2) | [`graph_renumber`](isc/operations/graph_renumber/README.md) | `initRenumber` + `renumberCore` | 그래프 분석 전 원본 ID를 0부터 연속 번호로 | ✅ | ✅ ([`L2/tests/renumber`](https://github.com/Xilinx/Vitis_Libraries/tree/v2025.1_update2/graph/L2/tests/renumber)) | 완료 |
-| [Codec L2](https://github.com/Xilinx/Vitis_Libraries/tree/v2025.1_update2/codec/L2) | [`image_bicubic`](isc/operations/image_bicubic/README.md) | `xf::codec::resizeTop` | 학습용 흑백 이미지를 모델 입력 크기로 일괄 축소 | ✅ | ✅ ([`L2/demos/resize`](https://github.com/Xilinx/Vitis_Libraries/tree/v2025.1_update2/codec/L2/demos/resize)) | 완료 |
+| [Codec L2](https://github.com/Xilinx/Vitis_Libraries/tree/v2025.1_update2/codec/L2) | [`image_bicubic`](isc/operations/image_bicubic/README.md) | `xf::codec::resizeTop` | 학습용 흑백 이미지를 모델 입력 크기로 축소 + 사용자 대비 보정 (`isc_post`) | ✅ | ✅ ([`L2/demos/resize`](https://github.com/Xilinx/Vitis_Libraries/tree/v2025.1_update2/codec/L2/demos/resize)) | 완료 |
 | [Quantitative Finance L2](https://github.com/Xilinx/Vitis_Libraries/tree/v2025.1_update2/quantitative_finance/L2) | [`mc_european`](isc/operations/mc_european/README.md) | `xf::fintech::MCEuropeanEngine` | 보유 유럽형 옵션 가격 야간 Monte Carlo 재계산 | ✅ | ✅ ([`L2/tests/MCEuropeanEngine`](https://github.com/Xilinx/Vitis_Libraries/tree/v2025.1_update2/quantitative_finance/L2/tests/MCEuropeanEngine)) | 완료 |
 | [Security L1](https://github.com/Xilinx/Vitis_Libraries/tree/v2025.1_update2/security/L1) | [`sha256`](isc/operations/sha256/README.md) | `xf::security::sha256` | 설치 패키지가 공개 다이제스트와 같은지 확인 | ⚠ main: 실패 · 수정 브랜치: ✅ | 미실행 | **미완료** — 공식 라이브러리 테스트가 검증 장치를 지원하지 않음 (플랫폼 자체 테스트는 통과) |
-| [Vision L1](https://github.com/Xilinx/Vitis_Libraries/tree/v2025.1_update2/vision/L1) | [`image_gaussian`](isc/operations/image_gaussian/README.md) | `GaussianBlur` | 문서 스캔 이미지의 잡음 제거 (OCR 전처리) | ✅ | 미실행 | **미완료** — 공식 L2 테스트는 U50 미지원·OpenCV C++ 필요. 연산 코드 커밋 전 |
-| [Vision L1](https://github.com/Xilinx/Vitis_Libraries/tree/v2025.1_update2/vision/L1) | [`image_resize`](isc/operations/image_resize/README.md) | `resize` (bilinear) | 학습 데이터 이미지를 모델 입력 크기로 일괄 축소 | ✅ | 미실행 | **미완료** — `image_gaussian`과 같음 |
-| [Vision L1](https://github.com/Xilinx/Vitis_Libraries/tree/v2025.1_update2/vision/L1) | [`image_sobel`](isc/operations/image_sobel/README.md) | `Sobel` | 제조 라인 영상에서 부품 윤곽(에지) 추출 | ✅ | 미실행 | **미완료** — `image_gaussian`과 같음 |
-| [BLAS L1](https://github.com/Xilinx/Vitis_Libraries/tree/v2025.1_update2/blas/L1) | [`gemv_i32`](isc/operations/gemv_i32/README.md) | `gemv` | 대출 심사용 선형 점수 모델로 고객 점수 일괄 계산 | ✅ | 미실행 | **미완료** — 공식 문서가 가리키는 벤치마크가 저장소에 없음. 연산 코드 커밋 전 |
+| [Vision L1](https://github.com/Xilinx/Vitis_Libraries/tree/v2025.1_update2/vision/L1) | [`image_gaussian`](isc/operations/image_gaussian/README.md) | `GaussianBlur` | 문서 스캔 이미지의 잡음 제거 + 사용자 이진화 규칙 (`isc_post`) | ✅ | 미실행 | **미완료** — 공식 L2 테스트는 U50 미지원·OpenCV C++ 필요 |
+| [Vision L1](https://github.com/Xilinx/Vitis_Libraries/tree/v2025.1_update2/vision/L1) | [`image_resize`](isc/operations/image_resize/README.md) | `resize` (bilinear) | 학습 데이터 이미지를 모델 입력 크기로 축소 + 사용자 밝기 보정 (`isc_post`) | ✅ | 미실행 | **미완료** — `image_gaussian`과 같음 |
+| [Vision L1](https://github.com/Xilinx/Vitis_Libraries/tree/v2025.1_update2/vision/L1) | [`image_sobel`](isc/operations/image_sobel/README.md) | `Sobel` | 제조 라인 영상에서 부품 윤곽(에지) 추출 + 사용자 잡음 제거 규칙 (`isc_post`) | ✅ | 미실행 | **미완료** — `image_gaussian`과 같음 |
+| [BLAS L1](https://github.com/Xilinx/Vitis_Libraries/tree/v2025.1_update2/blas/L1) | [`gemv_i32`](isc/operations/gemv_i32/README.md) | `gemv` | 대출 심사: 고객 점수 계산 + 사용자 판정 기준 (`isc_decide`) | ✅ | 미실행 | **미완료** — 공식 문서가 가리키는 벤치마크가 저장소에 없음 |
 
 ### 2. 시스템 자체 연산
 
@@ -99,7 +99,7 @@ ISC_Management_Platform/
 | Hook 프로파일 | [`filter`](isc/operations/filter/README.md) | Hook형 | 조건식 `return` 한 줄 | 매출 리포트용으로 금액 1,000~5,000원 주문만 추출 | ✅ (`u32`) ⚠ |
 | Hook 프로파일 | [`map`](isc/operations/map/README.md) | Hook형 | 변환식 `return` 한 줄 | 공장 온도 센서 값(f32)을 0.5 °C 단위 1바이트 코드로 | ✅ (`f32→u8`) ⚠ |
 | Hook 프로파일 | [`aggregate`](isc/operations/aggregate/README.md) | Hook형 | 조건식 `return` 한 줄 | 1,000원 미만 소액 거래(환불 포함)의 건수·합계·최소·최대 | ✅ (`i32`) |
-| 플랫폼 커널 | [`vector_topk`](isc/operations/vector_topk/README.md) | 연산 선택형 | 없음 (`k`, `chunk_bytes` 선택) | 사내 문서 검색(RAG)에서 가장 가까운 문서 5개 | ✅ |
+| 플랫폼 커널 | [`vector_topk`](isc/operations/vector_topk/README.md) | 연산 선택형 | 점수 규칙 `return` 한 줄 (`isc_score`, 선택), `k`, `chunk_bytes` | 사내 문서 검색(RAG): 열람 권한을 반영한 상위 문서 5개 | ✅ |
 | 플랫폼 커널 | [`identity`](isc/operations/identity/README.md) | 연산 선택형 | 없음 | 설치 직후 FPGA 실행 경로 점검 | ✅ |
 
 
@@ -197,6 +197,12 @@ parameters:              # 수정 가능 (isc describe에 표시된 항목만)
 | 연산 | 작성할 함수 | 호출 시점 |
 |---|---|---|
 | `graph_twohop` | `uint32_t isc_score(uint32_t src, uint32_t dst, uint32_t count)` | `xf::graph::twoHop`이 공통 이웃 수를 센 뒤 쌍마다 1번. 반환값이 그 쌍의 출력 |
+| `image_bicubic` | `uint8_t isc_post(uint8_t px)` | `xf::codec::resizeTop`이 영상을 줄인 뒤 출력 화소마다 1번 |
+| `image_sobel` | `uint8_t isc_post(uint8_t g)` | `xf::cv::Sobel`이 기울기를 계산한 뒤 기울기 화소마다 1번 (x·y 두 영상 모두) |
+| `image_gaussian` | `uint8_t isc_post(uint8_t px)` | `xf::cv::GaussianBlur`가 흐리게 한 뒤 출력 화소마다 1번 |
+| `image_resize` | `uint8_t isc_post(uint8_t px)` | `xf::cv::resize`가 크기를 바꾼 뒤 출력 화소마다 1번 |
+| `gemv_i32` | `int32_t isc_decide(int32_t score)` | `xf::blas::gemv`가 고객(행)마다 점수를 계산한 뒤 1번. 반환값이 그 행의 출력 |
+| `vector_topk` | `int32_t isc_score(uint32_t id, int32_t dot)` | 문서(행)마다 내적을 계산한 뒤, 순위를 매기기 전에 1번. `INT32_MIN`을 돌려주면 그 문서는 제외 |
 
 ```bash
 isc new [모듈 이름] --operation [연산 이름] --logic           # 시작 파일 logic.hpp를 모듈에 넣음 → return 줄 수정
@@ -240,7 +246,7 @@ hook:
 
 ## 3. 로직 작성 (Hook 템플릿)
 
-- 이 절은 **Hook형 모듈**과, 사용자 함수 자리가 있는 연산 선택형 모듈(현재 `graph_twohop`, 2.1 "사용자 로직")에 해당합니다. 그 밖의 연산 선택형 모듈은 로직 파일이 없고 `module.yaml`의 파라미터만 바꿉니다.
+- 이 절은 **Hook형 모듈**과, 사용자 함수 자리가 있는 연산 선택형 모듈(2.1 "사용자 로직" 표의 연산)에 해당합니다. 그 밖의 연산 선택형 모듈은 로직 파일이 없고 `module.yaml`의 파라미터만 바꿉니다.
 
 - 시작 파일을 받아 함수 내에 **`return` 줄만** 고칩니다. 타입은 함수 시그니처가 정합니다.
 - `return` 줄만으로 충분한 이유: 데이터 읽기·쓰기, 반복문, AXI 인터페이스는 플랫폼의 래퍼 커널(`isc/operations/<프로파일>/kernel/*.cpp.tmpl`)이 맡고, 래퍼가 값 하나마다 사용자 함수를 호출합니다. 그래서 사용자는 "값 하나를 받아 무엇을 돌려줄지"만 쓰면 됩니다. 세 프로파일(`filter` `map` `aggregate`) 모두 같은 구조입니다.
@@ -249,7 +255,7 @@ hook:
   - 식이 길어지면 보조 함수나 상수를 파일에 추가해도 됩니다(아래 작성 규칙).
   - 입력·출력 타입을 바꾸려면 시그니처를 직접 고치지 말고 `--type`/`--out-type`으로 시작 파일을 다시 받습니다.
   - `map`에서 `f32 → 정수` 변환은 범위를 먼저 잘라 내야 합니다(범위를 벗어나면 결과가 정해지지 않음, [`map` 문서](isc/operations/map/README.md) 4.2).
-- 연산 선택형 중 `graph_twohop`은 라이브러리 함수 뒤에 붙는 `isc_score`의 `return` 줄을 고칩니다([`graph_twohop` 문서](isc/operations/graph_twohop/README.md) 2.3). 그 밖의 연산 선택형(Vitis Libraries 연산, `vector_topk`, `identity`)은 아직 고칠 함수가 없고 `module.yaml`의 파라미터만 바꿉니다.
+- 사용자 함수 자리가 있는 연산 선택형은 라이브러리 함수 뒤에 붙는 함수의 `return` 줄을 고칩니다(2.1 "사용자 로직" 표, 각 연산 문서 2.3). 그 밖의 연산 선택형은 고칠 함수가 없고 `module.yaml`의 파라미터만 바꿉니다.
 
 ```bash
 isc template filter --type f32 -o clip_filter.hpp
@@ -343,7 +349,7 @@ isc report [실험 이름]
 ```
 
 - **CPU 기준선은 사용자가 작성하지 않습니다.** 연산마다 플랫폼이 CPU 구현을 하나씩 갖고 있습니다(`isc/operations/<연산>/baseline.py`, 예: `crc32` → `zlib.crc32`). `isc describe [연산 이름]`의 `baseline` 줄에서 확인합니다.
-- 그래서 가속 판정(speedup)은 **기준선이 있는 연산 선택형 모듈에서만** 나옵니다.
+- 그래서 가속 판정(speedup)은 **기준선이 있는 연산 선택형 모듈에서만** 나옵니다. 사용자 로직이 들어간 모듈은 기준선(원래 연산만 계산)과 결과가 달라서 비교하지 않습니다.
 
 | CPU 기준선 | 연산 |
 |---|---|
@@ -420,10 +426,10 @@ isc report [실험 이름]
 | [`snappy_compress`](isc/operations/snappy_compress/README.md) (Data Compression) | Kafka 이벤트 메시지 묶음 압축 | `kafka_snappy` | 없음 | 이벤트 묶음 200 KB → 블록 헤더 + Snappy 블록 | 풀어서 원본과 동일 (`check_output.py`) |
 | [`graph_twohop`](isc/operations/graph_twohop/README.md) (Graph) | 금융 이상거래 탐지: 공유 기기 수로 위험 점수 | `fraud_link` | `logic.hpp` (`isc_score`의 `return` 줄) | 계좌 800·기기 1,200 그래프 + 500쌍 → 쌍별 위험 점수 | `baseline.py` 결과에 같은 규칙을 적용한 값과 동일 |
 | [`graph_renumber`](isc/operations/graph_renumber/README.md) (Graph) | 원본 ID 연속 번호화 | `member_renumber` | 없음 | ID 5,000개 → 묶음 수 + 새 번호 | `baseline.py`와 동일, 일대일 대응 |
-| [`image_bicubic`](isc/operations/image_bicubic/README.md) (Codec) | 학습 이미지 일괄 축소 | `train_resize` | 없음 (`out_rows`·`out_cols` 지정) | 512×512 회색조 → 256×256 | 같은 커널의 C 시뮬레이션과 동일 |
+| [`image_bicubic`](isc/operations/image_bicubic/README.md) (Codec) | 학습 이미지 축소 + 대비 보정 | `train_resize` | `logic.hpp` (`isc_post`의 `return` 줄), `out_rows`·`out_cols` 지정 | 512×512 회색조 → 256×256 | 같은 커널의 C 시뮬레이션 결과에 같은 규칙을 적용한 값과 동일 |
 | [`mc_european`](isc/operations/mc_european/README.md) (Quantitative Finance) | 보유 옵션 가격 재계산 | `option_book` | 없음 | 옵션 8건 → 가격 8개 | Black-Scholes 대비 `\|d\|/S` ≤ 1% (공식 판정식) |
 | [`filter`](isc/operations/filter/README.md) (플랫폼 Hook) | 금액 1,000 이상 5,000 미만 주문 추출 | `amount_filter` | `amount_filter.hpp` (`return` 한 줄) | u32 10,000개 → 조건을 만족한 u32 | Python 필터와 동일 |
 | [`map`](isc/operations/map/README.md) (플랫폼 Hook) | 온도(f32)를 0.5 °C 단위 1바이트 코드로 변환 | `temp_code` | `temp_code.hpp` (`return` 한 줄) | f32 10,000개 → u8 10,000개 | Python 변환과 동일 |
 | [`aggregate`](isc/operations/aggregate/README.md) (플랫폼 Hook) | 1,000 미만 거래(환불 포함)의 건수·합계·최소·최대 | `small_tx` | `small_tx.hpp` (`return` 한 줄) | i32 10,000개 → 32바이트 | Python 집계와 동일 |
-| [`vector_topk`](isc/operations/vector_topk/README.md) (플랫폼 커널) | 문서 임베딩 상위 5개 검색 | `doc_search` | 없음 (`k=5` 지정) | 2,000×64 int8 → `(id, score)` 5쌍 | numpy 내적·정렬과 동일 |
+| [`vector_topk`](isc/operations/vector_topk/README.md) (플랫폼 커널) | 열람 권한을 반영한 문서 상위 5개 검색 | `doc_search` | `logic.hpp` (`isc_score`의 `return` 줄), `k=5` 지정 | 2,000×64 int8 → `(id, score)` 5쌍 | numpy 내적에 같은 규칙을 적용해 정렬한 결과와 동일 |
 | [`identity`](isc/operations/identity/README.md) (플랫폼 커널) | 설치 직후 실행 경로 점검 | `env_check` | 없음 | 텍스트 파일 → 같은 바이트 | `cmp`로 원본과 동일 |
