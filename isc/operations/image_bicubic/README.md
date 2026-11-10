@@ -1,192 +1,181 @@
-# `image_bicubic` — 쇼핑몰 상품 사진으로 고품질 썸네일 만들기 (연산 선택형)
+# `image_bicubic` — 학습용 흑백 이미지를 모델 입력 크기로 일괄 축소 (연산 선택형)
 
-| 개발 방식 | 사용자가 작성하는 것 | 커널 | 파라미터 | 플랫폼 자체 테스트 | 공식 라이브러리 테스트 |
-|---|---|---|---|---|---|
-| 연산 선택형 | 없음 (`isc new` 한 줄 + 출력 크기) | Vitis Codec L2 `xf::codec::resizeTop` (`kernel/bicubic_kernel.cpp`, 공식 데모 커널과 같은 본문) | `out_rows`, `out_cols` | ✅ 통과 (2026-11-05) | ✅ 통과 (2026-11-05) |
-
-> 이 연산은 시나리오 검증용 **프로토타입**입니다. 공식 데모 커널을 그대로 감쌌고, 커널 이름만 다릅니다.
-
-## 1. 시나리오
-
-| 항목 | 내용 |
-|---|---|
-| 사용자 | 쇼핑몰의 상품 이미지 처리 담당 개발자 |
-| 상황 | 쇼핑몰이 상품 원본 사진에서 고품질 썸네일(예: 256×256)을 생성한다 |
-| 가속하는 단계 | 고품질 축소 (bicubic) |
-| 입력 → 출력 | 8비트 영상 → 축소 영상 |
-| 완료 기준 | 같은 커널의 CPU C 시뮬레이션과 바이트 일치 |
-
-## 2. 연산 요약
-
-| 항목 | 내용 |
-|---|---|
-| 입력 | 리틀 엔디안 헤더 `u32 rows, u32 cols` + `u8 pixels[rows][cols]` (8비트 회색조 1채널) |
-| 출력 | 같은 형식: `u32 out_rows, u32 out_cols` + `u8 pixels[out_rows][out_cols]` |
-| 파라미터 | `out_rows`, `out_cols` (기본 256, 1~8192). **축소만** 됨: 출력은 입력보다 크지 않아야 함 |
-| 크기 한계 | 한 변 1~8192 화소 (공식 커널 `MAX_SRC`·`MAX_DST` 기준) |
-| CPU 참조 | 공식 커널 소스를 CPU에서 그대로 컴파일한 C 시뮬레이션 (`verification/u50_vitis_libraries/tools/csim/codec_resize_tb.cpp`) |
-| OpenCV와의 관계 | OpenCV `INTER_CUBIC`과는 좌표 정렬·가중치 정의가 달라 **바이트가 같지 않습니다** (이 문서 입력에서 평균 차이 2.71, 최대 138). 그래서 비교 기준으로 쓰지 않습니다 |
-| 메모리 | 포트 3개를 HBM 뱅크 0~2에 연결 (`operation.yaml`). 화소는 64비트 워드에 8개씩 묶어 보냄 |
-
-## 3. 준비
-
-- 공통 설치와 환경 확인: [README 1절](../../../README.md#1-설치-및-환경-구성)
-- 빌드에 **`VITIS_LIBRARIES`** 가 필요합니다: `export VITIS_LIBRARIES=[Vitis Libraries 2025.1 경로]`
-- 4.1의 예시 입력을 만들려면 Python `numpy`, `opencv-python`이 필요합니다 (검증 때 numpy 2.2.6, OpenCV 4.11.0). 실제 사진을 쓸 때는 필요 없습니다.
-- 4.5의 C 시뮬레이션은 Vitis를 설치하면 함께 오는 HLS 헤더(`$XILINX_HLS/include`)와 `g++`를 씁니다.
-- 모든 명령은 **저장소 루트**에서 실행합니다. 실습 파일은 `datasets/pscen/`(git에 올라가지 않음)에 만듭니다.
-
-## 4. 개발 절차
-
-### 4.1. 입력 만들기
-
-상품 사진 대신 512×512 회색조 합성 영상(상품 몸체·뚜껑·라벨 글자 + 약한 잡음, 고정 시드)을 만듭니다.
-
-```bash
-python3 isc/operations/image_bicubic/examples/make_input.py
-```
-
-입력 파일은 [`examples/make_input.py`](examples/make_input.py)가 만듭니다. 스크립트는 두 부분으로 나뉩니다.
-
-| 부분 | 하는 일 | 사용자 |
+| 개발 방식 | 사용하는 라이브러리 함수 | 검증 상태 |
 |---|---|---|
-| `make_sample()` | 예시 데이터를 만듦 | **바꾸는 곳** — 자기 데이터로 바꿈 |
-| `encode()` | 2절의 입력 형식(헤더·엔디안·타입)대로 바이트를 씀 | 고치지 않음 |
+| 연산 선택형 | Vitis Codec L2 `xf::codec::resizeTop` (`kernel/bicubic_kernel.cpp`, 공식 데모 커널과 같은 본문) | 플랫폼 자체 테스트 ✅ · 공식 라이브러리 테스트 ✅ (검증 장치 AMD Alveo U50 · [검증 기록](../../../verification/u50_vitis_libraries/results/image_bicubic.md)) |
 
-- 내 사진(PNG·JPEG 등) 변환: `python3 isc/operations/image_bicubic/examples/make_input.py --image 사진.jpg -o datasets/pscen/my_photo.bin` (회색조로 바꾸고 헤더를 붙임)
-- 저장 위치를 바꾸려면 `-o 경로`를 붙입니다.
+## 1. 연산 예시
 
-### 4.2. 모듈 만들기
+AI 모델 개발자가 제조 결함 사진·문서 스캔·X-ray처럼 흑백 이미지로 된 학습 데이터셋을 모델 입력 크기(예: 256×256)로 일괄 축소합니다. 이 축소를 CPU의 OpenCV 대신 FPGA의 Vitis Codec 라이브러리로 합니다.
+
+### 1.1. 전처리 코드 안에서 직접 축소하는 기존 방식
+
+```python
+import cv2
+
+img = cv2.imread("defect_0001.png", cv2.IMREAD_GRAYSCALE)
+small = cv2.resize(img, (256, 256), interpolation=cv2.INTER_CUBIC)
+cv2.imwrite("defect_0001_256.png", small)
+```
+
+### 1.2. ISC 전주기 시스템 기반의 방식
 
 ```bash
-isc describe image_bicubic                  # 입력·출력 형식 확인 (선택)
-isc new product_thumb --operation image_bicubic --set out_rows=256 --set out_cols=256
+python3 isc/operations/image_bicubic/examples/make_input.py --image defect_0001.png -o defect_0001.bin   # 이미지 → 연산 입력 형식
+isc new train_resize --operation image_bicubic --set out_rows=256 --set out_cols=256                  # 처음 한 번: 모듈 만들기 (출력 크기 지정)
+isc run train_resize --input defect_0001.bin --output defect_0001_256.bin --target hw                  # FPGA가 축소
 ```
 
-생성되는 `modules/product_thumb/module.yaml`:
+- 입력: 8비트 회색조 이미지 1장 (헤더 `u32 rows, u32 cols` + 화소). 한 변 1~8192 화소, 1채널만
+- 출력: 같은 형식으로 줄인 이미지. **축소만** 됨. PNG로 보려면 3절 결과 확인의 `--png`를 씀
+- 크기는 같게 줄지만 **화소 값은 1.1의 OpenCV 결과와 조금 다릅니다** (bicubic 정의가 다름. 예시 입력에서 평균 차이 2.71). 학습과 추론 모두 같은 방식으로 줄여야 합니다
+- 실제로 따라 할 절차는 2절(개발 절차)과 3절(실행 방법)에 있습니다.
 
-```yaml
-module:
-  id: product_thumb
-  name: product_thumb
-  version: 0.1.0
-operation:
-  id: image_bicubic
-  version: '1.0'
-parameters:
-  out_rows: 256
-  out_cols: 256
-```
+## 2. 개발 절차
 
-출력 크기는 호스트에서 넘기는 값이라 바꿔도 다시 빌드하지 않습니다.
+모든 명령은 저장소 루트에서 실행합니다. 입력 변환과 결과 확인에 Python `numpy`, `opencv-python`이 필요합니다.
 
-### 4.3. 검사
+### 2.1. 입력 준비
+
+**사용자가 할 일**: 쓸 이미지를 이 연산의 입력 형식으로 변환합니다.
 
 ```bash
-isc check product_thumb
+# 내 이미지(PNG·JPEG 등) → 회색조 + 헤더
+python3 isc/operations/image_bicubic/examples/make_input.py --image [이미지 파일] -o datasets/image_bicubic/[이름].bin
+
+# 또는 예시 영상(512×512 합성 영상, 고정 시드)으로 먼저 해 보기
+python3 isc/operations/image_bicubic/examples/make_input.py           # → datasets/image_bicubic/train_512.bin
 ```
 
-```text
-product_thumb: PASS
-  note   : operation 'image_bicubic' has no CPU baseline (baseline.py); `isc bench` cannot compute a speedup for it
-```
-
-`note`는 오류가 아닙니다. 이 연산은 CPU 기준선 대신 4.5의 방법으로 정답을 확인하므로, 속도 비교(`isc bench`)만 할 수 없다는 뜻입니다.
-
-### 4.4. 에뮬레이션 실행 (hw_emu)
+여러 장은 셸 반복문으로 한 장씩 변환합니다(코드 수정 불필요):
 
 ```bash
-isc run product_thumb --input datasets/pscen/product_512.bin --output datasets/pscen/product_thumb.emu.bin
+for f in data/train/*.png; do
+    python3 isc/operations/image_bicubic/examples/make_input.py --image "$f" -o "datasets/image_bicubic/$(basename "$f" .png).bin"
+done
 ```
 
-### 4.5. 결과 확인
+[`examples/make_input.py`](examples/make_input.py) 전체 코드입니다(주석 제외). 이미지를 읽는 방식을 바꿔야 하면 `read_image()`(내 이미지 읽기) 또는 `make_sample()`(예시 영상)만 고치고, `encode()`(입력 형식)와 `main()`은 그대로 둡니다.
 
-공식 커널 소스를 CPU용으로 한 번 컴파일하고(수 초), 같은 입력으로 돌려 FPGA 출력(헤더 8바이트 제외)과 바이트 비교합니다.
+```python
+import argparse
+import struct
+from pathlib import Path
+
+import cv2
+import numpy as np
+
+DEFAULT_OUTPUT = "datasets/image_bicubic/train_512.bin"
+
+
+def make_sample() -> np.ndarray:
+    rng = np.random.default_rng(7); h = w = 512
+    a = np.full((h, w), 245.0)
+    cv2.ellipse(a, (256, 280), (150, 110), 0, 0, 360, 90, -1)
+    cv2.rectangle(a, (200, 120), (312, 190), 140, -1)
+    cv2.putText(a, "ISC", (190, 300), cv2.FONT_HERSHEY_SIMPLEX, 2.5, 230, 6)
+    return np.clip(a + rng.normal(0, 3, a.shape), 0, 255).astype(np.uint8)
+
+
+def read_image(path: str) -> np.ndarray:
+    image = cv2.imread(path, cv2.IMREAD_GRAYSCALE)
+    if image is None:
+        raise SystemExit(f"영상을 읽지 못했습니다: {path}")
+    return image
+
+
+def encode(image: np.ndarray) -> bytes:
+    image = np.ascontiguousarray(image, dtype=np.uint8)
+    if image.ndim != 2:
+        raise ValueError("회색조(2차원) 영상만 받습니다")
+    rows, cols = image.shape
+    return struct.pack("<II", rows, cols) + image.tobytes()
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description="image_bicubic 입력 파일 만들기")
+    parser.add_argument("-o", "--output", default=DEFAULT_OUTPUT)
+    parser.add_argument("--image", help="실제 사진 파일 (PNG, JPEG 등)")
+    args = parser.parse_args()
+    image = read_image(args.image) if args.image else make_sample()
+    out = Path(args.output)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_bytes(encode(image))
+    print("ok", *image.shape)
+
+
+if __name__ == "__main__":
+    main()
+```
+
+수정 예 — 16비트 X-ray 이미지를 8비트로 바꿔 읽기 (이 연산은 8비트 1채널만 받음. 위 전체 코드에서 `read_image()`만 이것으로 바꿈):
+
+```python
+def read_image(path: str) -> np.ndarray:
+    image = cv2.imread(path, cv2.IMREAD_UNCHANGED)
+    if image is None:
+        raise SystemExit(f"영상을 읽지 못했습니다: {path}")
+    if image.ndim == 3:
+        image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    if image.dtype == np.uint16:
+        image = (image >> 8).astype(np.uint8)
+    return image
+```
+
+### 2.2. 모듈 만들기
+
+**사용자가 할 일**: 모듈 이름과 출력 크기(모델 입력 크기)를 정합니다.
 
 ```bash
-source [Vitis 설치 경로]/settings64.sh      # $XILINX_HLS 설정
+isc new train_resize --operation image_bicubic --set out_rows=256 --set out_cols=256
+```
+
+- 출력 크기는 나중에 `modules/train_resize/module.yaml`의 `out_rows`·`out_cols`로도 바꿀 수 있고, 바꿔도 다시 빌드하지 않습니다.
+- 출력 크기는 입력보다 크지 않아야 합니다(1~8192).
+
+### 2.3. 로직 작성
+
+**사용자가 할 일**: 현재 없음. 추가 예정: `isc_post(px)` — 축소가 끝난 화소마다 호출되는 함수(예: 밝기 정규화, 이진화). 추가되면 이 단계에서 작성합니다.
+
+### 2.4. 검사
+
+**사용자가 할 일**: 빌드하기 전에 모듈 설정을 검사합니다. 문제가 없으면 `PASS`가 표시됩니다.
+
+```bash
+isc check train_resize
+```
+
+## 3. 실행 방법
+
+**사용자가 할 일**: `--input`에 2.1의 파일, `--output`에 결과를 저장할 경로를 지정합니다. 결과 확인의 C 시뮬레이션 명령에는 입력·출력 크기(`512 512 256 256` 자리)를 실제 크기로 맞춥니다.
+
+```bash
+# 에뮬레이션 실행 (카드 없이, 처음 한 번 수 분 빌드)
+isc run train_resize --input datasets/image_bicubic/train_512.bin --output datasets/image_bicubic/train_256.emu.bin
+
+# 결과 확인 1: 정답 기준 만들기 — 라이브러리 커널 소스를 CPU용으로 컴파일해 같은 입력으로 실행
+source [Vitis 설치 경로]/settings64.sh
 V=$VITIS_LIBRARIES/codec
 g++ -O2 -std=c++14 -w -I$XILINX_HLS/include -I$V/L2/include/hw/resize -I$V/L2/demos/resize/kernel \
     verification/u50_vitis_libraries/tools/csim/codec_resize_tb.cpp $V/L2/demos/resize/kernel/kernel_resize.cpp \
-    -o datasets/pscen/codec_resize_tb
-tail -c +9 datasets/pscen/product_512.bin > datasets/pscen/product_512.raw
-datasets/pscen/codec_resize_tb datasets/pscen/product_512.raw datasets/pscen/thumb_csim.raw 512 512 256 256
-python3 - <<'EOF'
-got = open("datasets/pscen/product_thumb.emu.bin", "rb").read()
-ref = open("datasets/pscen/thumb_csim.raw", "rb").read()
-print("header", got[:8].hex(), "pixels", len(got) - 8)
-print("MATCH" if got[8:] == ref else "MISMATCH")
-EOF
-```
+    -o datasets/image_bicubic/codec_resize_tb
+tail -c +9 datasets/image_bicubic/train_512.bin > datasets/image_bicubic/train_512.raw
+datasets/image_bicubic/codec_resize_tb datasets/image_bicubic/train_512.raw datasets/image_bicubic/train_256.csim.raw 512 512 256 256
 
-```text
-header 0001000000010000 pixels 65536
-MATCH
-```
+# 결과 확인 2: FPGA 출력 = C 시뮬레이션이면 MATCH (정상). OpenCV와의 차이는 참고로 출력
+python3 isc/operations/image_bicubic/examples/check_output.py datasets/image_bicubic/train_256.emu.bin \
+    --input datasets/image_bicubic/train_512.bin --csim datasets/image_bicubic/train_256.csim.raw
 
-### 4.6. U50 실행 (hw)
+# FPGA 카드 실행 (hw) (처음 한 번 hw 빌드 약 48분) — 카드 출력이 에뮬레이션 출력과 같은지 플랫폼이 자동 비교
+isc run train_resize --input datasets/image_bicubic/train_512.bin --output datasets/image_bicubic/train_256.hw.bin --target hw
+python3 isc/operations/image_bicubic/examples/check_output.py datasets/image_bicubic/train_256.hw.bin \
+    --input datasets/image_bicubic/train_512.bin --csim datasets/image_bicubic/train_256.csim.raw --png datasets/image_bicubic
 
-```bash
-isc run product_thumb --input datasets/pscen/product_512.bin --output datasets/pscen/product_thumb.hw.bin --target hw
-```
-
-플랫폼이 hw_emu 기준 출력을 먼저 만들고 → hw 빌드 → 카드 실행 → 두 출력을 바이트 비교합니다. 이 서버에서 처음 실행(빌드 포함)은 약 48분 걸렸습니다. 4.5의 Python 부분에서 `product_thumb.emu.bin`을 `product_thumb.hw.bin`으로 바꿔 한 번 더 확인합니다.
-
-실제 출력 (발췌):
-
-```text
-  input      : 262152 bytes  .../datasets/pscen/product_512.bin
-  output     : 65544 bytes  .../product_thumb_product_512.hw.bin
-  kernel_ms  : 0.228
-  validation : PASS  (cross_target) matches reference target output (65544 bytes)
-```
-
-### 4.7. 기록 확인
-
-```bash
-isc records --module product_thumb
+# 실행 기록
+isc records --module train_resize
 isc show [실행 ID]
 ```
 
-## 5. 내 데이터에 적용하기
-
-| 바꿀 것 | 방법 |
-|---|---|
-| 사진 | 4.1 스크립트의 `--image 사진 -o 경로`로 변환한 파일을 `--input`으로 |
-| 썸네일 크기 | `modules/product_thumb/module.yaml`의 `out_rows`·`out_cols`를 바꾸거나, 크기별로 모듈을 따로 만듦 |
-| 컬러 사진 | 이 연산은 1채널만 받음. 채널을 나눠 세 번 실행한 뒤 합치는 방식은 시험하지 않았음 |
-
-## 6. 문제 해결
-
-| 증상 | 원인 | 해결 |
-|---|---|---|
-| `image_bicubic only downscales: ... -> ...` | 출력이 입력보다 큼 | `out_rows ≤ rows`, `out_cols ≤ cols`로 |
-| `image must be 1..8192 on each side; ...` | 한 변이 8192 초과 | 먼저 다른 방법으로 줄이거나 나눠서 처리 |
-| `header says RxC = ... pixels; received ...` | 헤더와 화소 수가 다름 | 헤더를 `rows, cols` 순서로 썼는지 확인 |
-| `bicubicinterpolator.hpp` 없음 (빌드) | 헤더 경로 | 이 연산의 `operation.yaml`에 공식 경로(`codec/L2/include/hw/resize`)가 들어 있음. `VITIS_LIBRARIES`가 올바른지 확인 |
-| OpenCV 결과와 다름 | 정의가 다른 bicubic | 정상. 4.5의 C 시뮬레이션과 비교 |
-
-## 7. 검증 기록
-
-### 7.1. 플랫폼 자체 테스트
-
-| 항목 | 내용 |
-|---|---|
-| 확인일 | 2026-11-05 |
-| 환경 | Ubuntu 22.04.5 LTS (커널 6.8.0-138), Vitis 2025.1, XRT 2.19.194, Vitis Libraries `v2025.1_update2` (커밋 b2c657d), AMD Alveo U50 (`xilinx_u50_gen3x16_xdma_base_5`), 저장소 기준 커밋 `8742866` + 이 연산 폴더(커밋 전) |
-| 입력 | 4.1의 `product_512.bin` (262,152바이트, sha256 `d2d22836…`), 512×512 → 256×256 |
-| hw_emu | 통과 — 실행 `20261105T235433-da9d66` |
-| hw (U50) | **통과** — 실행 `20261105T235433-3457ff`. hw 출력 = hw_emu 출력(플랫폼 자동 대조) = CPU C 시뮬레이션 (65,536화소 바이트 일치) |
-| 참고 | 1차 빌드는 헤더 경로 오류, 2차는 동시 빌드 중 메모리 부족으로 실패. 경로를 고치고 단독으로 다시 빌드해 통과. 2026-11-09에 4.5의 C 시뮬레이션 명령을 다시 실행해 hw 출력과 일치함을 재확인 |
-| 확인하지 않은 것 | 성능(가속 효과). 이 문서의 입력 한 가지로만 확인 |
-
-### 7.2. 공식 라이브러리 테스트
-
-Vitis Libraries 공식 테스트를 고치지 않고 U50에서 빌드·실행했습니다. **입력은 공식 테스트에 들어 있는 데이터**이며 위 시나리오 데이터가 아닙니다.
-
-| 항목 | 내용 |
-|---|---|
-| 공식 테스트 | `codec/L2/demos/resize` (Vitis Libraries `v2025.1_update2`) |
-| 빌드 | `make all TARGET=hw PLATFORM=xilinx_u50_gen3x16_xdma_5_202210_1` (2026-11-04, 약 71분) |
-| 실행 | `make run TARGET=hw PLATFORM=xilinx_u50_gen3x16_xdma_5_202210_1` (공식 `images/t0.raw`, 512×512 → 64×64) |
-| 결과 | **통과** — 2026-11-05, `PASS: no error found.` / `Info: Test passed` |
+- `--png 폴더`를 붙이면 입력·FPGA 결과·OpenCV 결과를 `input.png`, `fpga.png`, `opencv.png`로 저장합니다.
+- 다른 이미지는 2.1처럼 변환한 뒤 `--input`·`--output`만 바꿔 다시 실행합니다. 모듈은 그대로 재사용하고 다시 빌드하지 않습니다.
+- 터미널 출력을 파일로도 남기려면 명령 뒤에 `2>&1 | tee [로그 파일]`을 붙입니다.

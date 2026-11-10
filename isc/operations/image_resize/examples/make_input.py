@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""image_resize 입력 파일 만들기 (README 4.1).
+"""image_resize 입력 파일 만들기 (README 2.1).
 
-    python3 isc/operations/image_resize/examples/make_input.py                          # 예시 영상 2장 → datasets/pscen/frame_384x216.bin, frame_1920x1080.bin
+    python3 isc/operations/image_resize/examples/make_input.py                          # 예시 영상 2장 → datasets/image_resize/frame_384x216.bin, frame_1920x1080.bin
     python3 isc/operations/image_resize/examples/make_input.py --image 사진.jpg -o 경로   # 내 사진(PNG·JPEG 등)을 변환
 
 [바꾸는 곳]       make_sample() — 예시 영상 (합성 장면). 또는 --image로 실제 사진을 읽음 (회색조로 변환)
@@ -15,7 +15,7 @@ from pathlib import Path
 import cv2
 import numpy as np
 
-SAMPLES = {"datasets/pscen/frame_384x216.bin": (384, 216), "datasets/pscen/frame_1920x1080.bin": (1920, 1080)}
+SAMPLES = {"datasets/image_resize/frame_384x216.bin": (384, 216), "datasets/image_resize/frame_1920x1080.bin": (1920, 1080)}
 
 
 # ── [바꾸는 곳] 데이터 ─────────────────────────────────────────────

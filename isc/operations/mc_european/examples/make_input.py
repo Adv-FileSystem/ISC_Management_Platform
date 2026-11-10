@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""mc_european 입력 파일 만들기 (README 4.1).
+"""mc_european 입력 파일 만들기 (README 2.1).
 
-    python3 isc/operations/mc_european/examples/make_input.py                 # 예시 옵션 8건 → datasets/pscen/option_book_8.bin
+    python3 isc/operations/mc_european/examples/make_input.py                 # 예시 옵션 8건 → datasets/mc_european/option_book_8.bin
     python3 isc/operations/mc_european/examples/make_input.py --csv book.csv  # 내 보유 옵션 CSV를 변환
     python3 isc/operations/mc_european/examples/make_input.py -o 경로          # 저장 위치 바꾸기
 
@@ -15,7 +15,7 @@ import csv
 import struct
 from pathlib import Path
 
-DEFAULT_OUTPUT = "datasets/pscen/option_book_8.bin"
+DEFAULT_OUTPUT = "datasets/mc_european/option_book_8.bin"
 FIELDS = ("S", "K", "sigma", "q", "r", "T", "type")
 
 

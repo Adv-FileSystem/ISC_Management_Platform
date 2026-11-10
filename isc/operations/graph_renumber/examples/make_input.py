@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""graph_renumber 입력 파일 만들기 (README 4.1).
+"""graph_renumber 입력 파일 만들기 (README 2.1).
 
-    python3 isc/operations/graph_renumber/examples/make_input.py           # 예시 데이터 → datasets/pscen/members_5000.bin
+    python3 isc/operations/graph_renumber/examples/make_input.py           # 예시 데이터 → datasets/graph_renumber/members_5000.bin
     python3 isc/operations/graph_renumber/examples/make_input.py -o 경로    # 저장 위치 바꾸기
 
 [바꾸는 곳]       make_sample() — 회원별 그룹 번호 목록 (내 데이터: 번호 목록을 돌려주면 됨)
@@ -12,7 +12,7 @@ import random
 import struct
 from pathlib import Path
 
-DEFAULT_OUTPUT = "datasets/pscen/members_5000.bin"
+DEFAULT_OUTPUT = "datasets/graph_renumber/members_5000.bin"
 
 
 # ── [바꾸는 곳] 데이터 ─────────────────────────────────────────────

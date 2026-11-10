@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""image_sobel 입력 파일 만들기 (README 4.1).
+"""image_sobel 입력 파일 만들기 (README 2.1).
 
-    python3 isc/operations/image_sobel/examples/make_input.py                          # 예시 영상 → datasets/pscen/part_cam_256.bin
+    python3 isc/operations/image_sobel/examples/make_input.py                          # 예시 영상 → datasets/image_sobel/part_cam_256.bin
     python3 isc/operations/image_sobel/examples/make_input.py --image 사진.jpg -o 경로   # 내 사진(PNG·JPEG 등)을 변환
 
 [바꾸는 곳]       make_sample() — 예시 영상 (부품 카메라 영상 256×256). 또는 --image로 실제 사진을 읽음 (회색조로 변환)
@@ -15,7 +15,7 @@ from pathlib import Path
 import cv2
 import numpy as np
 
-DEFAULT_OUTPUT = "datasets/pscen/part_cam_256.bin"
+DEFAULT_OUTPUT = "datasets/image_sobel/part_cam_256.bin"
 
 
 # ── [바꾸는 곳] 데이터 ─────────────────────────────────────────────

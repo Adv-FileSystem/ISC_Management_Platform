@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""gemv_i32 입력 파일 만들기 (README 4.1).
+"""gemv_i32 입력 파일 만들기 (README 2.1).
 
-    python3 isc/operations/gemv_i32/examples/make_input.py           # 예시 데이터 → datasets/pscen/credit_512x64.bin
+    python3 isc/operations/gemv_i32/examples/make_input.py           # 예시 데이터 → datasets/gemv_i32/credit_512x64.bin
     python3 isc/operations/gemv_i32/examples/make_input.py -o 경로    # 저장 위치 바꾸기
 
 [바꾸는 곳]       make_sample() — 고객 특성 행렬 A, 가중치 x, 기본 점수 y, alpha, beta
@@ -15,7 +15,7 @@ from pathlib import Path
 
 import numpy as np
 
-DEFAULT_OUTPUT = "datasets/pscen/credit_512x64.bin"
+DEFAULT_OUTPUT = "datasets/gemv_i32/credit_512x64.bin"
 
 
 # ── [바꾸는 곳] 데이터 ─────────────────────────────────────────────

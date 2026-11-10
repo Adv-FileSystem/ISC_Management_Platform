@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""adler32 입력 파일 만들기 (README 4.1).
+"""adler32 입력 파일 만들기 (README 2.1).
 
     python3 isc/operations/adler32/examples/make_input.py           # 예시 데이터 → datasets/adler32/payload.bin
     python3 isc/operations/adler32/examples/make_input.py -o 경로    # 저장 위치 바꾸기
@@ -35,7 +35,7 @@ def main() -> None:
     out = Path(args.output)
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_bytes(encode(data))
-    print(f"expected adler32 = {zlib.adler32(data):08x}")      # 4.5에서 비교할 기준값
+    print(f"expected adler32 = {zlib.adler32(data):08x}")      # 결과 확인(README 3)에서 비교할 기준값
 
 
 if __name__ == "__main__":

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""map 입력 파일 만들기 (README 4.1).
+"""map 입력 파일 만들기 (README 2.1).
 
     python3 isc/operations/map/examples/make_input.py                          # 예시 데이터 → datasets/map/temps.bin
     python3 isc/operations/map/examples/make_input.py --csv 파일.csv --column 열이름   # 내 CSV의 한 열을 변환

@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
-"""image_bicubic 입력 파일 만들기 (README 4.1).
+"""image_bicubic 입력 파일 만들기 (README 2.1).
 
-    python3 isc/operations/image_bicubic/examples/make_input.py                          # 예시 영상 → datasets/pscen/product_512.bin
-    python3 isc/operations/image_bicubic/examples/make_input.py --image 사진.jpg -o 경로   # 내 사진(PNG·JPEG 등)을 변환
+    python3 isc/operations/image_bicubic/examples/make_input.py                          # 예시 영상 → datasets/image_bicubic/train_512.bin
+    python3 isc/operations/image_bicubic/examples/make_input.py --image 사진.jpg -o 경로   # 내 이미지(PNG·JPEG 등)를 변환
 
-[바꾸는 곳]       make_sample() — 예시 영상 (상품 사진 512×512). 또는 --image로 실제 사진을 읽음 (회색조로 변환)
+[바꾸는 곳]       make_sample() — 예시 영상 (제품 사진 형태의 합성 영상 512×512)
+                 read_image()  — --image로 넘긴 실제 이미지를 읽는 방식 (지금은 회색조로 읽음)
 [고치지 않는 곳]  encode()      — 입력 형식: u32 rows, u32 cols + u8 pixels[rows][cols] (리틀 엔디안, 8비트 회색조 1채널)
                                  크기 한계: 한 변 1~8192 화소, 출력은 입력보다 크지 않아야 함
 """
@@ -15,7 +16,7 @@ from pathlib import Path
 import cv2
 import numpy as np
 
-DEFAULT_OUTPUT = "datasets/pscen/product_512.bin"
+DEFAULT_OUTPUT = "datasets/image_bicubic/train_512.bin"
 
 
 # ── [바꾸는 곳] 데이터 ─────────────────────────────────────────────

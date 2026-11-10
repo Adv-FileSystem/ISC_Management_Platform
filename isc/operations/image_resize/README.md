@@ -1,212 +1,193 @@
 # `image_resize` — 학습 데이터 이미지를 모델 입력 크기로 일괄 축소 (연산 선택형)
 
-| 개발 방식 | 사용자가 작성하는 것 | 커널 | 파라미터 | 플랫폼 자체 테스트 | 공식 라이브러리 테스트 |
-|---|---|---|---|---|---|
-| 연산 선택형 | 없음 (`isc new` 한 줄 + 출력 크기) | Vitis Vision L1 `xf::cv::resize` bilinear (`kernel/resize_kernel.cpp`, 공식 L2 예제와 같은 설정) | `out_rows`, `out_cols` | ✅ 통과 (2026-11-05) | 미실행 |
-
-> 커널 본문과 설정(bilinear, 최대 입력 3840×2160, 최대 출력 1920×1080, 최대 2배 축소, URAM 사용, 8비트 1채널)은 공식 L2 예제와 같습니다.
-
-## 1. 시나리오
-
-| 항목 | 내용 |
-|---|---|
-| 사용자 | AI 모델 개발자 (학습 데이터 전처리) |
-| 상황 | 학습 데이터 이미지를 모델 입력 크기(예: 1920×1080 → 960×540)로 일괄 축소한다 |
-| 가속하는 단계 | 크기 조정 (bilinear 보간) |
-| 입력 → 출력 | 8비트 회색조 영상 → 축소 영상 |
-| 완료 기준 | OpenCV `INTER_LINEAR`와 화소 차이 5 이하 (공식 testbench 허용오차) |
-
-## 2. 연산 요약
-
-| 항목 | 내용 |
-|---|---|
-| 입력 | 리틀 엔디안 헤더 `u32 rows, u32 cols` + `u8 pixels[rows][cols]` (8비트 회색조 1채널) |
-| 출력 | 같은 형식: `u32 out_rows, u32 out_cols` + `u8 pixels[out_rows][out_cols]` |
-| 파라미터 | `out_rows`(기본 540, 최대 1080), `out_cols`(기본 960, 최대 1920). 실행 인자라 바꿔도 다시 빌드하지 않음 |
-| 크기 한계 | 입력 최대 3840×2160, 출력 최대 1920×1080. **축소는 2배까지**: `rows ≤ 2·out_rows`, `cols ≤ 2·out_cols` (커널 상수 `MAXDOWNSCALE 2`) |
-| CPU 참조 | `baseline.py` — OpenCV `cv2.resize(INTER_LINEAR)`. 장치는 고정소수점 보간이라 값이 조금 다를 수 있어, 플랫폼 자동 대조에는 쓰지 않고 4.5에서 허용오차로 비교 |
-| 메모리 | 포트 2개(입력, 출력)를 HBM 뱅크 0~1에 연결 (`operation.yaml`) |
-
-## 3. 준비
-
-- 공통 설치와 환경 확인: [README 1절](../../../README.md#1-설치-및-환경-구성)
-- 빌드에 **`VITIS_LIBRARIES`** 가 필요합니다: `export VITIS_LIBRARIES=[Vitis Libraries 2025.1 경로]`
-- 4.1의 예시 입력과 4.5의 결과 확인에는 Python `numpy`, `opencv-python`이 필요합니다 (검증 때 numpy 2.2.6, OpenCV 4.11.0).
-- 모든 명령은 **저장소 루트**에서 실행합니다. 실습 파일은 `datasets/pscen/`(git에 올라가지 않음)에 만듭니다.
-
-## 4. 개발 절차
-
-1920×1080 영상은 hw_emu에서 너무 오래 걸립니다. 그래서 **작은 영상(384×216 → 192×108)으로 hw_emu와 카드 결과를 맞춰 본 뒤**, 원래 크기(1920×1080 → 960×540)는 카드에서만 실행해 OpenCV와 비교합니다. 출력 크기가 달라 모듈을 두 개 만듭니다(빌드는 같은 것을 함께 씁니다).
-
-### 4.1. 입력 만들기
-
-학습 사진 대신 합성 장면(명암 배경 + 사물 12개 + 약한 잡음, 고정 시드)을 두 크기로 만듭니다.
-
-```bash
-python3 isc/operations/image_resize/examples/make_input.py
-```
-
-```text
-ok
-```
-
-입력 파일은 [`examples/make_input.py`](examples/make_input.py)가 만듭니다. 스크립트는 두 부분으로 나뉩니다.
-
-| 부분 | 하는 일 | 사용자 |
+| 개발 방식 | 사용하는 라이브러리 함수 | 검증 상태 |
 |---|---|---|
-| `make_sample()` | 예시 데이터를 만듦 | **바꾸는 곳** — 자기 데이터로 바꿈 |
-| `encode()` | 2절의 입력 형식(헤더·엔디안·타입)대로 바이트를 씀 | 고치지 않음 |
+| 연산 선택형 | Vitis Vision L1 `xf::cv::resize` bilinear (`kernel/resize_kernel.cpp`) | 플랫폼 자체 테스트 ✅ · 공식 라이브러리 테스트 미실행 (공식 테스트가 검증 장치를 지원하지 않음·OpenCV C++ 필요) (검증 장치 AMD Alveo U50 · [검증 기록](../../../verification/u50_vitis_libraries/results/image_resize.md)) |
 
-- 내 사진(PNG·JPEG 등) 변환: `python3 isc/operations/image_resize/examples/make_input.py --image 사진.jpg -o datasets/pscen/my_photo.bin` (회색조로 바꾸고 헤더를 붙임)
-- 저장 위치를 바꾸려면 `-o 경로`를 붙입니다.
+## 1. 연산 예시
 
-### 4.2. 모듈 만들기
+AI 모델 개발자가 학습 데이터 이미지를 모델 입력 크기(예: 1920×1080 → 960×540)로 일괄 축소합니다. 이 bilinear 축소를 CPU 대신 FPGA에서 합니다.
+
+### 1.1. 전처리 코드 안에서 직접 축소하는 기존 방식
+
+```python
+import cv2
+
+img = cv2.imread("frame_0001.png", cv2.IMREAD_GRAYSCALE)
+small = cv2.resize(img, (960, 540), interpolation=cv2.INTER_LINEAR)
+cv2.imwrite("frame_0001_960.png", small)
+```
+
+### 1.2. ISC 전주기 시스템 기반의 방식
 
 ```bash
-isc describe image_resize                   # 입력·출력 형식 확인 (선택)
-isc new train_preview --operation image_resize --set out_rows=108 --set out_cols=192   # 작은 영상 확인용
-isc new train_input   --operation image_resize --set out_rows=540 --set out_cols=960   # 원래 크기
+python3 isc/operations/image_resize/examples/make_input.py --image frame_0001.png -o frame_0001.bin   # 이미지 → 연산 입력 형식
+isc new train_input --operation image_resize --set out_rows=540 --set out_cols=960                  # 처음 한 번: 모듈 만들기 (출력 크기 지정)
+isc run train_input --input frame_0001.bin --output frame_0001_960.bin --target hw --no-validate      # FPGA가 축소
 ```
 
-생성되는 `modules/train_input/module.yaml` (`train_preview`는 `out_rows: 108`, `out_cols: 192`):
+- 입력: 헤더 `u32 rows, u32 cols` + `u8 pixels[rows][cols]` (8비트 회색조 1채널, little-endian). 2.1의 스크립트가 이미지에서 만들어 줍니다. 입력 최대 3840×2160
+- 출력: 같은 형식으로 줄인 이미지. 출력 최대 1920×1080. **한 번에 2배까지만 줄일 수 있습니다**(`rows ≤ 2·out_rows`, `cols ≤ 2·out_cols`)
+- 장치는 고정소수점 보간이라 1.1의 OpenCV 결과와 화소 값이 조금 다를 수 있습니다. 차이 5 이하면 정상입니다
+- 1920×1080 같은 큰 영상은 에뮬레이션(hw_emu)이 매우 느려서, 카드에서 실행할 때 `--no-validate`로 에뮬레이션 대조를 건너뛰고 결과 확인 스크립트로 OpenCV와 비교합니다(3절)
+- 실제로 따라 할 절차는 2절(개발 절차)과 3절(실행 방법)에 있습니다.
 
-```yaml
-module:
-  id: train_input
-  name: train_input
-  version: 0.1.0
-operation:
-  id: image_resize
-  version: '1.0'
-parameters:
-  out_rows: 540
-  out_cols: 960
+## 2. 개발 절차
+
+모든 명령은 저장소 루트에서 실행합니다. 입력 변환과 결과 확인에 Python `numpy`, `opencv-python`이 필요합니다.
+
+### 2.1. 입력 준비
+
+**사용자가 할 일**: 쓸 이미지를 이 연산의 입력 형식으로 변환합니다.
+
+```bash
+# 내 이미지(PNG·JPEG 등) → 회색조 + 헤더
+python3 isc/operations/image_resize/examples/make_input.py --image [이미지 파일] -o datasets/image_resize/[이름].bin
+
+# 또는 예시 영상(합성 장면: 명암 배경 + 사물 12개 + 약한 잡음, 고정 시드)을 두 크기로 만들어 먼저 해 보기
+python3 isc/operations/image_resize/examples/make_input.py            # → datasets/image_resize/frame_384x216.bin, frame_1920x1080.bin
 ```
 
-### 4.3. 검사
+- 작은 예시(384×216)는 에뮬레이션으로 확인하는 용도, 큰 예시(1920×1080)는 카드에서만 실행하는 용도입니다(3절).
+
+여러 장은 셸 반복문으로 한 장씩 변환합니다(코드 수정 불필요):
+
+```bash
+for f in data/train/*.png; do
+    python3 isc/operations/image_resize/examples/make_input.py --image "$f" -o "datasets/image_resize/$(basename "$f" .png).bin"
+done
+```
+
+[`examples/make_input.py`](examples/make_input.py) 전체 코드입니다(주석 제외). 이미지를 읽는 방식을 바꿔야 하면 `read_image()`(내 이미지 읽기) 또는 `make_sample()`(예시 영상)만 고치고, `encode()`(입력 형식)·`write()`와 `main()`은 그대로 둡니다.
+
+```python
+import argparse
+import struct
+from pathlib import Path
+
+import cv2
+import numpy as np
+
+SAMPLES = {"datasets/image_resize/frame_384x216.bin": (384, 216), "datasets/image_resize/frame_1920x1080.bin": (1920, 1080)}
+
+
+def make_sample(w: int, h: int, seed: int = 3) -> np.ndarray:
+    rng = np.random.default_rng(seed)
+    yy, xx = np.mgrid[0:h, 0:w]
+    a = (60 + 120 * xx / w + 40 * np.sin(yy / h * 6)).astype(np.float32)
+    for _ in range(12):
+        cx, cy, r = rng.integers(0, w), rng.integers(0, h), int(rng.integers(h // 20, h // 6))
+        cv2.circle(a, (int(cx), int(cy)), r, float(rng.integers(0, 255)), -1)
+    return np.clip(a + rng.normal(0, 6, a.shape), 0, 255).astype(np.uint8)
+
+
+def read_image(path: str) -> np.ndarray:
+    image = cv2.imread(path, cv2.IMREAD_GRAYSCALE)
+    if image is None:
+        raise SystemExit(f"영상을 읽지 못했습니다: {path}")
+    return image
+
+
+def encode(image: np.ndarray) -> bytes:
+    image = np.ascontiguousarray(image, dtype=np.uint8)
+    if image.ndim != 2:
+        raise ValueError("회색조(2차원) 영상만 받습니다")
+    rows, cols = image.shape
+    return struct.pack("<II", rows, cols) + image.tobytes()
+
+
+def write(path: str, image: np.ndarray) -> None:
+    out = Path(path)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_bytes(encode(image))
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description="image_resize 입력 파일 만들기")
+    parser.add_argument("-o", "--output", help="--image와 함께: 저장 위치")
+    parser.add_argument("--image", help="실제 사진 파일 (PNG, JPEG 등)")
+    args = parser.parse_args()
+    if args.image:
+        if not args.output:
+            parser.error("--image에는 -o가 필요합니다")
+        image = read_image(args.image)
+        write(args.output, image)
+        print("ok", *image.shape)
+        return
+    for path, (w, h) in SAMPLES.items():
+        write(path, make_sample(w, h))
+    print("ok")
+
+
+if __name__ == "__main__":
+    main()
+```
+
+수정 예 — 세로가 긴 사진을 16:9로 가운데만 잘라 읽기 (2배 축소 제한을 맞추려는 경우. 위 전체 코드에서 `read_image()`만 이것으로 바꿈):
+
+```python
+def read_image(path: str) -> np.ndarray:
+    image = cv2.imread(path, cv2.IMREAD_GRAYSCALE)
+    if image is None:
+        raise SystemExit(f"영상을 읽지 못했습니다: {path}")
+    rows, cols = image.shape
+    target = cols * 9 // 16
+    if rows > target:
+        top = (rows - target) // 2
+        image = image[top:top + target]
+    return image
+```
+
+### 2.2. 모듈 만들기
+
+**사용자가 할 일**: 모듈 이름과 출력 크기(`out_rows` 기본 540·최대 1080, `out_cols` 기본 960·최대 1920)를 정합니다. 출력 크기마다 모듈을 따로 만들 수 있고, 같은 빌드를 함께 씁니다.
+
+```bash
+isc new train_preview --operation image_resize --set out_rows=108 --set out_cols=192   # 작은 예시 확인용 (384×216 → 192×108)
+isc new train_input   --operation image_resize --set out_rows=540 --set out_cols=960   # 원래 크기 (1920×1080 → 960×540)
+```
+
+- 출력 크기는 나중에 `modules/[모듈 이름]/module.yaml`의 `out_rows`·`out_cols`로도 바꿀 수 있고, 바꿔도 다시 빌드하지 않습니다.
+- 2배보다 크게 줄이려면(예: 3840×2160 → 960×540) 두 번 나눠 실행합니다(3840×2160 → 1920×1080 → 960×540). 이 방법과 확대는 시험하지 않았습니다.
+
+### 2.3. 로직 작성
+
+**사용자가 할 일**: 현재 없음. 추가 예정: 축소 앞·뒤 화소마다 호출되는 함수 `isc_pre(px)`·`isc_post(px)`(예: 축소 후 밝기 정규화). 추가되면 이 단계에서 작성합니다.
+
+### 2.4. 검사
+
+**사용자가 할 일**: 빌드하기 전에 모듈 설정을 검사합니다. 문제가 없으면 `PASS`가 표시됩니다.
 
 ```bash
 isc check train_preview
 isc check train_input
 ```
 
-```text
-train_preview: PASS
-train_input: PASS
-```
+## 3. 실행 방법
 
-### 4.4. 에뮬레이션 실행 (hw_emu)
-
-작은 영상만 실행합니다.
+**사용자가 할 일**: `--input`에 2.1의 파일, `--output`에 결과를 저장할 경로를 지정합니다. 결과 확인 명령에도 같은 입력 파일을 `--input`으로 지정합니다(출력 크기는 출력 파일에서 읽음). 큰 영상은 `--no-validate`를 붙이고 결과 확인을 반드시 합니다.
 
 ```bash
-isc run train_preview --input datasets/pscen/frame_384x216.bin --output datasets/pscen/train_preview.emu.bin
-```
+# 에뮬레이션 실행: 작은 영상만 (처음 한 번 수 분 빌드. 빌드가 캐시에 있으면 약 80초)
+isc run train_preview --input datasets/image_resize/frame_384x216.bin --output datasets/image_resize/train_preview.emu.bin
 
-처음 실행하면 hw_emu 빌드(수 분)를 한 뒤 실행합니다. 빌드가 캐시에 있으면 이 입력은 약 80초 걸립니다.
+# 결과 확인: 지금 쓰는 CPU 코드(cv2.resize INTER_LINEAR)와 화소마다 비교 — 차이 5 이하면 PASS
+python3 isc/operations/image_resize/examples/check_output.py datasets/image_resize/train_preview.emu.bin --input datasets/image_resize/frame_384x216.bin
 
-### 4.5. 결과 확인
+# FPGA 카드 실행 (hw), 작은 영상 (처음 한 번 hw 빌드 약 44분) — 카드 출력이 에뮬레이션 출력과 같은지 플랫폼이 자동 비교
+isc run train_preview --input datasets/image_resize/frame_384x216.bin --output datasets/image_resize/train_preview.hw.bin --target hw
+python3 isc/operations/image_resize/examples/check_output.py datasets/image_resize/train_preview.hw.bin --input datasets/image_resize/frame_384x216.bin
 
-CPU 참조(OpenCV)로 같은 입력을 계산하고, 화소마다 차이가 5 이하인지 봅니다.
+# FPGA 카드 실행 (hw), 원래 크기 — 에뮬레이션 대조를 건너뛰므로(validation: skipped) 결과 확인으로 OpenCV와 꼭 비교
+isc run train_input --input datasets/image_resize/frame_1920x1080.bin --output datasets/image_resize/train_input.hw.bin --target hw --no-validate
+python3 isc/operations/image_resize/examples/check_output.py datasets/image_resize/train_input.hw.bin --input datasets/image_resize/frame_1920x1080.bin --png datasets/image_resize
 
-```bash
-python3 - <<'EOF'
-import sys, numpy as np
-sys.path.insert(0, "isc/operations/image_resize")
-from baseline import compute
-inp = open("datasets/pscen/frame_384x216.bin", "rb").read()
-got = open("datasets/pscen/train_preview.emu.bin", "rb").read()
-ref = compute(inp, {"out_rows": 108, "out_cols": 192})
-d = np.abs(np.frombuffer(got[8:], np.uint8).astype(int) - np.frombuffer(ref[8:], np.uint8))
-print("header", got[:8] == ref[:8], "max_diff", d.max(), "over_5", int((d > 5).sum()))
-print("PASS" if got[:8] == ref[:8] and d.max() <= 5 else "FAIL")
-EOF
-```
-
-```text
-header True max_diff 1 over_5 0
-PASS
-```
-
-### 4.6. U50 실행 (hw)
-
-```bash
-# 작은 영상: hw_emu 기준 출력과 자동 대조
-isc run train_preview --input datasets/pscen/frame_384x216.bin --output datasets/pscen/train_preview.hw.bin --target hw
-# 원래 크기: hw_emu 기준 실행을 건너뜀 (--no-validate)
-isc run train_input --input datasets/pscen/frame_1920x1080.bin --output datasets/pscen/train_input.hw.bin --target hw --no-validate
-```
-
-첫 번째 명령은 hw_emu 기준 출력을 먼저 만들고 → hw 빌드 → 카드 실행 → 두 출력을 바이트 비교합니다. 이 서버에서 hw 빌드는 약 44분 걸렸습니다(처음 한 번, 두 모듈이 같은 빌드를 씀). 두 번째 명령은 플랫폼 대조가 `skipped`로 나오므로, **반드시 4.5의 코드로 OpenCV와 비교합니다**. 파일 이름을 `train_input.hw.bin`·`frame_1920x1080.bin`으로, 파라미터를 `{"out_rows": 540, "out_cols": 960}`으로 바꿉니다. `train_preview.hw.bin`도 같은 방법으로 한 번 더 확인합니다.
-
-실제 출력 (발췌):
-
-```text
-train_preview [hw] succeeded  run_id=20261110T105618-d3e5b0
-  input      : 82952 bytes  .../datasets/pscen/frame_384x216.bin
-  output     : 20744 bytes  .../datasets/pscen/train_preview.hw.bin
-  kernel_ms  : 1.977
-  validation : PASS  (cross_target) matches reference target output (20744 bytes)
-
-train_input [hw] succeeded  run_id=20261110T105739-35fb6e
-  input      : 2073608 bytes  .../datasets/pscen/frame_1920x1080.bin
-  output     : 518408 bytes  .../datasets/pscen/train_input.hw.bin
-  kernel_ms  : 41.547
-  validation : PASS  (cross_target) skipped
-```
-
-OpenCV 비교 (두 출력 모두):
-
-```text
-train_preview.hw.bin  header True max_diff 1 over_5 0
-train_input.hw.bin    header True max_diff 1 over_5 0
-```
-
-### 4.7. 기록 확인
-
-```bash
+# 실행 기록
 isc records --module train_input
 isc show [실행 ID]
 ```
 
-## 5. 내 데이터에 적용하기
-
-| 바꿀 것 | 방법 |
-|---|---|
-| 사진 | 4.1 스크립트의 `--image 사진 -o 경로`로 변환한 파일을 `--input`으로. 사진마다 반복 실행 (모듈 재사용) |
-| 출력 크기 | `module.yaml`의 `out_rows`·`out_cols`. 다시 빌드하지 않음. 크기별로 모듈을 따로 만들어도 됨 |
-| 2배보다 크게 축소 (예: 4K → 960×540) | 한 번에 안 됨. 두 번 나눠 실행 (3840×2160 → 1920×1080 → 960×540). 이 방법은 시험하지 않았음 |
-| 확대 | 크기 검사는 통과하지만 시험하지 않았음 |
-| 컬러 사진 | 이 연산은 1채널만 받음. 채널을 나눠 세 번 실행하는 방식은 시험하지 않았음 |
-| 고품질 썸네일 (bicubic) | [`image_bicubic`](../image_bicubic/README.md) 사용 |
-
-## 6. 문제 해결
-
-| 증상 | 원인 | 해결 |
-|---|---|---|
-| `image input needs a 8-byte header and pixels; received ...` | 헤더가 없거나 화소가 없음 | `u32 rows, u32 cols`를 앞에 씀 |
-| `input image must be at most 2160x3840; the header says ...` | 입력이 최대 크기를 넘음 | 먼저 다른 방법으로 줄임 |
-| `header says RxC = ... pixels; received ...` | 헤더와 화소 수가 다름 | 헤더를 `rows, cols` 순서로 썼는지 확인 |
-| `output must be at most 1080x1920; asked ...` | 출력이 최대 크기를 넘음 | `out_rows ≤ 1080`, `out_cols ≤ 1920` |
-| `downscale beyond 2x is not built in: ... -> ...` | 2배보다 크게 축소 | 두 번에 나눠 실행 (5절) |
-| 원래 크기 hw_emu가 끝나지 않음 | 1920×1080은 에뮬레이션이 매우 느림 | 4.4처럼 작은 영상으로 hw_emu 확인, 원래 크기는 `--target hw --no-validate` 후 4.5로 비교 |
-| OpenCV와 1 정도 다름 | 장치는 고정소수점 보간 | 정상. 공식 testbench는 5까지 허용 |
-| `... requires an environment variable for include path '${VITIS_LIBRARIES}/...'` (`isc check`) | `VITIS_LIBRARIES` 미설정 | `export VITIS_LIBRARIES=[경로]` 후 다시 검사 |
-
-## 7. 검증 기록
-
-### 7.1. 플랫폼 자체 테스트
-
-| 항목 | 내용 |
-|---|---|
-| 확인일 | 2026-11-05 (시나리오 검증), 2026-11-10 (이 문서 절차 재실행) |
-| 환경 | Ubuntu 22.04.5 LTS (커널 6.8.0-138), Python 3.10.12, Vitis 2025.1, XRT 2.19.194 (2025.1), Vitis Libraries `v2025.1_update2` (커밋 b2c657d), AMD Alveo U50 (`xilinx_u50_gen3x16_xdma_base_5`), 저장소 기준 커밋 `3237e67` + 이 연산 폴더(커밋 전), numpy 2.2.6, OpenCV 4.11.0 |
-| 시나리오 검증 (11-05) | 모듈 `train_resize_small`(384×216 → 192×108): hw = hw_emu 일치(플랫폼 대조 PASS), OpenCV 최대 차이 1 — 실행 `20261105T172233-219b41`. 모듈 `train_resize_full`(1920×1080 → 960×540, hw만): OpenCV 최대 차이 1 — 실행 `20261105T172429-98181a` |
-| 이 문서 절차 (11-10) | 4.1~4.6을 저장소 루트에서 그대로 실행. 입력 `frame_384x216.bin` (82,952바이트, sha256 `c76fda41…`), `frame_1920x1080.bin` (2,073,608바이트, sha256 `b388fe30…`). hw_emu `20261110T105221-9137f5` OpenCV 최대 차이 1. hw `20261110T105618-d3e5b0` = hw_emu(플랫폼 대조 PASS), OpenCV 최대 차이 1. hw `20261110T105739-35fb6e`(원래 크기) OpenCV 최대 차이 1, 허용 5 초과 화소 0 |
-| 빌드 | hw 빌드 약 44분 (2026-11-04), 타이밍 미달로 인한 클럭 축소 없음 |
-| 추가 크기 확인 | 128×128 → 64×64 — hw_emu에서 OpenCV와 최대 차이 1, hw = hw_emu (플랫폼 대조 PASS) |
-| 확인하지 않은 것 | 성능(가속 효과). 3840×2160 입력, 확대, 시험한 크기 외의 비율 |
-
-### 7.2. 공식 라이브러리 테스트
-
-**미실행** — 공식 Vision L2 테스트의 대상 장치는 zcu104·vck190·aws-vu9p-f1이고 U50이 없습니다. 또 공식 호스트가 OpenCV C++ 라이브러리를 요구하는데, 이 서버에는 설치되어 있지 않습니다(관리자 권한 필요). 그래서 같은 커널 설정을 플랫폼 연산으로 감싸 7.1로 검증했습니다.
+- `--png 폴더`를 붙이면 FPGA 결과를 PNG로 저장합니다.
+- 다른 이미지는 2.1처럼 변환한 뒤 `--input`·`--output`만 바꿔 다시 실행합니다. 모듈은 그대로 재사용하고 다시 빌드하지 않습니다.
+- 컬러 이미지를 채널별로 세 번 실행하는 방식은 시험하지 않았습니다. 고품질 축소(bicubic)가 필요하면 [`image_bicubic`](../image_bicubic/README.md)을 씁니다.
+- 터미널 출력을 파일로도 남기려면 명령 뒤에 `2>&1 | tee [로그 파일]`을 붙입니다.

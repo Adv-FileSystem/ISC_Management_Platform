@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""graph_twohop 입력 파일 만들기 (README 4.1).
+"""graph_twohop 입력 파일 만들기 (README 2.1) — 계좌·기기 사용 기록 + 점검할 계좌 쌍.
 
-    python3 isc/operations/graph_twohop/examples/make_input.py           # 예시 데이터 → datasets/pscen/friends_1000_fof.bin
+    python3 isc/operations/graph_twohop/examples/make_input.py           # 예시 데이터 → datasets/graph_twohop/accounts_devices.bin
     python3 isc/operations/graph_twohop/examples/make_input.py -o 경로    # 저장 위치 바꾸기
 
-[바꾸는 곳]       make_sample() — 친구 그래프(사람마다 친구 집합)와 추천 후보 쌍 목록
+[바꾸는 곳]       make_sample() — 정점마다 연결된 정점 집합(adj)과 점검할 쌍 목록(pairs)
                                  (내 데이터: 같은 모양의 adj, pairs를 돌려주면 됨)
 [고치지 않는 곳]  encode()      — 입력 형식: u32 V, u32 E, u32 P, u32 0 + u32 offset[V+1] + u32 index[E] (CSR)
                                  + (u32 src, u32 dst)[P] (리틀 엔디안)
@@ -14,24 +14,35 @@ import random
 import struct
 from pathlib import Path
 
-DEFAULT_OUTPUT = "datasets/pscen/friends_1000_fof.bin"
+DEFAULT_OUTPUT = "datasets/graph_twohop/accounts_devices.bin"
 
 
 # ── [바꾸는 곳] 데이터 ─────────────────────────────────────────────
 def make_sample():
-    rng = random.Random(11); V = 1000
-    adj = [set() for _ in range(V)]
-    for u in range(V):                      # 사람마다 무작위 친구 4명 (양방향)
-        for _ in range(4):
-            w = rng.randrange(V)
-            if w != u: adj[u].add(w); adj[w].add(u)
-    rng = random.Random(12); pairs = set()
-    while len(pairs) < 250:                 # 친구의 친구(아직 친구 아님) = 추천 후보
-        s = rng.randrange(V); f = rng.choice(sorted(adj[s])); d = rng.choice(sorted(adj[f]))
-        if d != s and d not in adj[s]: pairs.add((s, d))
-    while len(pairs) < 500:                 # 무작위 대조군
-        s, d = rng.randrange(V), rng.randrange(V)
-        if s != d and d not in adj[s]: pairs.add((s, d))
+    rng = random.Random(21)
+    accounts, devices = 800, 1200                      # 정점 번호: 계좌 0~799, 기기 800~1999
+    adj = [set() for _ in range(accounts + devices)]
+
+    def use(account, device):                          # 계좌가 기기를 사용 (양방향 간선)
+        adj[account].add(device); adj[device].add(account)
+
+    rings = [list(range(r * 8, r * 8 + 8)) for r in range(5)]      # 의심 조직 5개 × 계좌 8개
+    in_ring = {a for ring in rings for a in ring}
+    for r, ring in enumerate(rings):
+        pool = [accounts + r * 4 + k for k in range(4)]            # 조직마다 돌려 쓰는 기기 4대
+        for a in ring:
+            for d in rng.sample(pool, rng.choice([3, 4])):
+                use(a, d)
+    for a in range(accounts):                          # 일반 계좌: 자기 기기 1~2대 (가끔 우연히 겹침)
+        if a not in in_ring:
+            for _ in range(rng.choice([1, 2])):
+                use(a, accounts + 20 + rng.randrange(devices - 20))
+
+    pairs = set()
+    while len(pairs) < 250:                            # 같은 조직 안의 계좌 쌍
+        ring = rng.choice(rings); s, d = rng.sample(ring, 2); pairs.add((s, d))
+    while len(pairs) < 500:                            # 무작위 계좌 쌍 (대조군)
+        s, d = rng.sample(range(accounts), 2); pairs.add((s, d))
     pairs = sorted(pairs, key=lambda p: rng.random())
     return adj, pairs
 

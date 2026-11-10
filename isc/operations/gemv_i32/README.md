@@ -1,182 +1,151 @@
 # `gemv_i32` — 대출 심사 점수 모델로 고객 점수 일괄 계산 (연산 선택형)
 
-| 개발 방식 | 사용자가 작성하는 것 | 커널 | 파라미터 | 플랫폼 자체 테스트 | 공식 라이브러리 테스트 |
-|---|---|---|---|---|---|
-| 연산 선택형 | 없음 (`isc new` 한 줄) | Vitis BLAS L1 `xf::blas::gemv` (`kernel/gemv_i32_kernel.cpp`, 공식 L1 테스트 top `uut_top.cpp`와 같은 구성) | 없음 (α·β는 입력 헤더에 씀) | ✅ 통과 (2026-11-05) | 미실행 |
+| 개발 방식 | 사용하는 라이브러리 함수 | 검증 상태 |
+|---|---|---|
+| 연산 선택형 | Vitis BLAS L1 `xf::blas::gemv` (`kernel/gemv_i32_kernel.cpp`) | 플랫폼 자체 테스트 ✅ · 공식 라이브러리 테스트 미실행 (공식 문서가 가리키는 벤치마크가 저장소에 없음) (검증 장치 AMD Alveo U50 · [검증 기록](../../../verification/u50_vitis_libraries/results/gemv_i32.md)) |
 
-> 공식 L1 테스트 top(`blas/L1/tests/hw/gemv/uut_top.cpp`)의 구성(`gem2Stream` → `gemv` → `writeStream2Vec`, 4 lane)을 그대로 쓰고, 배열만 메모리 포트로 바꿨습니다.
+## 1. 연산 예시
 
-## 1. 시나리오
+금융사 대출 심사 시스템 개발자가 선형 점수 모델로 고객 수천 명의 점수를 한 번에 계산합니다. 점수 = α·(고객 특성 행렬 A)·(가중치 x) + β·(기본 점수 y)입니다. 이 행렬-벡터 곱을 CPU 대신 FPGA에서 합니다.
 
-| 항목 | 내용 |
-|---|---|
-| 사용자 | 금융사 대출 심사 시스템 개발자 |
-| 상황 | 대출 심사용 선형 점수 모델로 고객 수천 명의 점수를 한 번에 계산한다 (점수 = α·(고객 특성 행렬 A)·(가중치 x) + β·(기본 점수 y)) |
-| 가속하는 단계 | 행렬-벡터 곱 |
-| 입력 → 출력 | 고객 특성 행렬 A(int32), 가중치 x, 기본 점수 y → 고객별 점수 |
-| 완료 기준 | numpy 계산과 바이트 일치 |
+### 1.1. 심사 배치 코드 안에서 직접 계산하는 기존 방식
 
-## 2. 연산 요약
+```python
+import numpy as np
 
-| 항목 | 내용 |
-|---|---|
-| 입력 | 리틀 엔디안 `u32 m, u32 n, i32 alpha, i32 beta` + `i32 A[m][n]`(행 우선) + `i32 x[n]` + `i32 y[m]` |
-| 출력 | `i32 y_out[m]` = `alpha·A·x + beta·y` (int32 산술. 넘치면 2^32로 감김) |
-| 파라미터 | 없음. `alpha`, `beta`는 입력 헤더에 씀 |
-| 크기 한계 | `m ≥ 1`, `n ≥ 1`, 행렬이 HBM 뱅크 하나(256 MiB)에 들어가야 함 (`m × n` 약 6,700만 이하) |
-| 열 수 맞춤 | 커널은 한 번에 4열씩 곱합니다. `n`이 4의 배수가 아니면 플랫폼이 0으로 채워 보내므로 사용자가 맞출 필요는 없습니다 |
-| CPU 참조 | `baseline.py` — numpy int64로 곱한 뒤 int32로 자름. 장치 출력과 **바이트까지 같아야** 함 |
-| 메모리 | 포트 4개(A, x, y, y_out)를 HBM 뱅크 0~3에 연결 (`operation.yaml`) |
+A = np.load("customers.npy")
+w = np.load("weights.npy")
+scores = A @ w + 600
+```
 
-## 3. 준비
-
-- 공통 설치와 환경 확인: [README 1절](../../../README.md#1-설치-및-환경-구성)
-- 빌드에 **`VITIS_LIBRARIES`** 가 필요합니다: `export VITIS_LIBRARIES=[Vitis Libraries 2025.1 경로]`
-- 4.1의 예시 입력과 4.5의 결과 확인에는 Python `numpy`가 필요합니다 (검증 때 numpy 2.2.6).
-- 모든 명령은 **저장소 루트**에서 실행합니다. 실습 파일은 `datasets/pscen/`(git에 올라가지 않음)에 만듭니다.
-
-## 4. 개발 절차
-
-### 4.1. 입력 만들기
-
-고객 512명 × 특성 64개의 정수 특성 행렬(−124~124, 공식 L1 테스트와 같은 값 범위), 특성별 가중치, 기본 점수 600을 만듭니다 (고정 시드).
+### 1.2. ISC 전주기 시스템 기반의 방식
 
 ```bash
-python3 isc/operations/gemv_i32/examples/make_input.py
+python3 isc/operations/gemv_i32/examples/make_input.py -o credit.bin                 # 고객 특성·가중치·기본 점수 → 연산 입력 형식 (2.1에서 내 데이터를 읽도록 수정)
+isc new credit_score --operation gemv_i32                                            # 처음 한 번: 모듈 만들기
+isc run credit_score --input credit.bin --output scores.bin --target hw              # FPGA가 행렬-벡터 곱 계산
 ```
 
-```text
-m 512 n 64 bytes 133392
+- 입력: `u32 m, u32 n, i32 alpha, i32 beta` + `i32 A[m][n]`(행 우선) + `i32 x[n]` + `i32 y[m]` (little-endian). 2.1의 스크립트가 만들어 줍니다. 행렬은 HBM 뱅크 하나(256 MiB)에 들어가야 합니다(`m × n` 약 6,700만 이하)
+- 출력: `i32 y_out[m]` = `alpha·A·x + beta·y`. 1.1의 `scores`와 바이트까지 같습니다(int64로 곱한 뒤 int32로 자른 값)
+- **정수(int32)만** 받습니다. 실수 특성은 정수 척도로 바꿔(예: ×100 후 반올림) 넣고 결과도 같은 척도로 해석합니다. 곱의 합이 int32 범위(약 ±21억)를 넘으면 감겨서 틀린 값이 됩니다
+- `n`이 4의 배수가 아니어도 플랫폼이 0으로 채워 보내므로 사용자가 맞출 필요는 없습니다
+- 실제로 따라 할 절차는 2절(개발 절차)과 3절(실행 방법)에 있습니다.
+
+## 2. 개발 절차
+
+모든 명령은 저장소 루트에서 실행합니다. 입력 변환과 결과 확인에 Python `numpy`가 필요합니다.
+
+### 2.1. 입력 준비
+
+**사용자가 할 일**: 고객 특성 행렬·가중치·기본 점수·α·β를 이 연산의 입력 형식으로 변환합니다. 내 데이터를 쓰려면 [`examples/make_input.py`](examples/make_input.py)의 `make_sample()`이 내 데이터를 읽도록 고칩니다.
+
+예시(고객 512명 × 특성 64개 정수 행렬(−124~124), 특성별 가중치, 기본 점수 600, 고정 시드)로 먼저 해 보려면:
+
+```bash
+python3 isc/operations/gemv_i32/examples/make_input.py               # → datasets/gemv_i32/credit_512x64.bin
 ```
 
-입력 파일은 [`examples/make_input.py`](examples/make_input.py)가 만듭니다. 스크립트는 두 부분으로 나뉩니다.
-
-| 부분 | 하는 일 | 사용자 |
-|---|---|---|
-| `make_sample()` | 예시 데이터를 만듦 | **바꾸는 곳** — 자기 데이터로 바꿈 |
-| `encode()` | 2절의 입력 형식(헤더·엔디안·타입)대로 바이트를 씀 | 고치지 않음 |
-
-- 내 데이터는 `make_sample()`이 돌려주는 값을 같은 모양으로 바꿔 넣습니다 (예: `np.load(...)`로 읽은 배열).
 - 저장 위치를 바꾸려면 `-o 경로`를 붙입니다.
 
-### 4.2. 모듈 만들기
+[`examples/make_input.py`](examples/make_input.py) 전체 코드입니다(주석 제외). `make_sample()`만 고치고, `encode()`(입력 형식, 크기 검사 포함)와 `main()`은 그대로 둡니다. `make_sample()`은 `A, x, y, alpha, beta`를 돌려주면 됩니다.
+
+```python
+import argparse
+import struct
+from pathlib import Path
+
+import numpy as np
+
+DEFAULT_OUTPUT = "datasets/gemv_i32/credit_512x64.bin"
+
+
+def make_sample():
+    rng = np.random.default_rng(21); m, n = 512, 64
+    A = rng.integers(-124, 125, size=(m, n), dtype=np.int32)
+    x = rng.integers(-120, 123, size=n, dtype=np.int32)
+    y = np.full(m, 600, dtype=np.int32)
+    alpha, beta = 1, 1
+    return A, x, y, alpha, beta
+
+
+def encode(A, x, y, alpha: int, beta: int) -> bytes:
+    A, x, y = (np.asarray(v, dtype="<i4") for v in (A, x, y))
+    m, n = A.shape
+    if x.shape != (n,) or y.shape != (m,):
+        raise ValueError(f"A가 {m}x{n}이면 x는 {n}개, y는 {m}개여야 합니다 (x {x.shape}, y {y.shape})")
+    return struct.pack("<IIii", m, n, alpha, beta) + A.tobytes() + x.tobytes() + y.tobytes()
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description="gemv_i32 입력 파일 만들기")
+    parser.add_argument("-o", "--output", default=DEFAULT_OUTPUT)
+    args = parser.parse_args()
+    A, x, y, alpha, beta = make_sample()
+    data = encode(A, x, y, alpha, beta)
+    out = Path(args.output)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_bytes(data)
+    print("m", A.shape[0], "n", A.shape[1], "bytes", len(data))
+
+
+if __name__ == "__main__":
+    main()
+```
+
+수정 예 — 고객 특성 CSV(실수)와 가중치 CSV 읽기 (위 전체 코드에서 `make_sample()`만 이것으로 바꿈):
+
+```python
+def make_sample():
+    A = np.loadtxt("/data/loan/customers.csv", delimiter=",", skiprows=1)
+    A = np.rint(A * 100).astype(np.int32)
+    x = np.loadtxt("/data/loan/weights.csv", delimiter=",", dtype=np.int32)
+    y = np.full(len(A), 600, dtype=np.int32)
+    return A, x, y, 1, 1
+```
+
+### 2.2. 모듈 만들기
+
+**사용자가 할 일**: 모듈 이름을 정합니다. 이 연산은 파라미터가 없습니다(α·β는 2.1의 입력 헤더에 씀).
 
 ```bash
-isc describe gemv_i32                       # 입력·출력 형식 확인 (선택)
 isc new credit_score --operation gemv_i32
 ```
 
-생성되는 `modules/credit_score/module.yaml` — 고칠 것이 없습니다.
+`modules/credit_score/module.yaml`이 만들어지며 고칠 것은 없습니다.
 
-```yaml
-module:
-  id: credit_score
-  name: credit_score
-  version: 0.1.0
-operation:
-  id: gemv_i32
-  version: '1.0'
-```
+### 2.3. 로직 작성
 
-### 4.3. 검사
+**사용자가 할 일**: 현재 없음. 추가 예정: 고객별 점수를 받아 결과 코드를 돌려주는 함수 `isc_decide(score)`(예: 점수 구간에 따라 승인·보류·거절)와 특성 값 변환 함수. 추가되면 이 단계에서 작성합니다.
+
+### 2.4. 검사
+
+**사용자가 할 일**: 빌드하기 전에 모듈 설정을 검사합니다. 문제가 없으면 `PASS`가 표시됩니다.
 
 ```bash
 isc check credit_score
 ```
 
-```text
-credit_score: PASS
-```
+## 3. 실행 방법
 
-### 4.4. 에뮬레이션 실행 (hw_emu)
+**사용자가 할 일**: `--input`에 2.1의 파일, `--output`에 결과를 저장할 경로를 지정합니다. 결과 확인 명령에도 같은 입력 파일을 `--input`으로 지정하고, 점수표가 필요하면 `--csv`에 저장할 경로를 지정합니다.
 
 ```bash
-isc run credit_score --input datasets/pscen/credit_512x64.bin --output datasets/pscen/credit_score.emu.bin
-```
+# 에뮬레이션 실행 (카드 없이, 처음 한 번 수 분 빌드. 빌드가 캐시에 있으면 약 30초)
+isc run credit_score --input datasets/gemv_i32/credit_512x64.bin --output datasets/gemv_i32/credit_score.emu.bin
 
-처음 실행하면 hw_emu 빌드(수 분)를 한 뒤 실행합니다. 빌드가 캐시에 있으면 이 입력은 약 30초 걸립니다.
+# 결과 확인: CPU 참조(baseline.py, numpy)와 바이트 비교 — MATCH면 정상
+python3 isc/operations/gemv_i32/examples/check_output.py datasets/gemv_i32/credit_score.emu.bin --input datasets/gemv_i32/credit_512x64.bin
 
-### 4.5. 결과 확인
+# FPGA 카드 실행 (hw) (처음 한 번 hw 빌드 약 47분) — 카드 출력이 에뮬레이션 출력과 같은지 플랫폼이 자동 비교
+isc run credit_score --input datasets/gemv_i32/credit_512x64.bin --output datasets/gemv_i32/credit_score.hw.bin --target hw
+python3 isc/operations/gemv_i32/examples/check_output.py datasets/gemv_i32/credit_score.hw.bin --input datasets/gemv_i32/credit_512x64.bin --csv datasets/gemv_i32/scores.csv
 
-연산 폴더의 CPU 참조(`baseline.py`)로 같은 입력을 계산해 바이트 비교합니다.
-
-```bash
-python3 - <<'EOF'
-import sys, numpy as np
-sys.path.insert(0, "isc/operations/gemv_i32")
-from baseline import compute
-inp = open("datasets/pscen/credit_512x64.bin", "rb").read()
-got = open("datasets/pscen/credit_score.emu.bin", "rb").read()
-score = np.frombuffer(got, "<i4")
-print("customers", len(score), "min", score.min(), "max", score.max(), "first", score[:3].tolist())
-print("MATCH" if got == compute(inp, {}) else "MISMATCH")
-EOF
-```
-
-```text
-customers 512 min -122813 max 122734 first [-73301, -22887, 27422]
-MATCH
-```
-
-### 4.6. U50 실행 (hw)
-
-```bash
-isc run credit_score --input datasets/pscen/credit_512x64.bin --output datasets/pscen/credit_score.hw.bin --target hw
-```
-
-플랫폼이 hw_emu 기준 출력을 먼저 만들고 → hw 빌드 → 카드 실행 → 두 출력을 바이트 비교합니다. 이 서버에서 hw 빌드는 약 47분 걸렸습니다(처음 한 번). 4.5의 코드에서 `credit_score.emu.bin`을 `credit_score.hw.bin`으로 바꿔 한 번 더 확인합니다.
-
-실제 출력 (발췌):
-
-```text
-credit_score [hw] succeeded  run_id=20261110T105407-51b6c2
-  input      : 133392 bytes  .../datasets/pscen/credit_512x64.bin
-  output     : 2048 bytes  .../datasets/pscen/credit_score.hw.bin
-  kernel_ms  : 0.156
-  validation : PASS  (cross_target) matches reference target output (2048 bytes)
-```
-
-### 4.7. 기록 확인
-
-```bash
+# 실행 기록
 isc records --module credit_score
 isc show [실행 ID]
 ```
 
-## 5. 내 데이터에 적용하기
-
-| 바꿀 것 | 방법 |
-|---|---|
-| 고객 특성 | 실수 특성은 정수 척도로 바꿔(예: ×100 후 반올림) `A`에 씀. 결과도 같은 척도로 해석 |
-| 가중치·기본 점수 | `x`, `y`를 바꿈. 기본 점수가 없으면 `beta = 0` |
-| 고객 수 | 헤더의 `m`을 바꿈. 모듈은 그대로 재사용 (크기는 실행 인자라 다시 빌드하지 않음) |
-| 큰 값 | 곱의 합이 int32 범위(약 ±21억)를 넘으면 감겨서 틀린 값이 됨. 특성·가중치 척도를 줄임 |
-
-## 6. 문제 해결
-
-| 증상 | 원인 | 해결 |
-|---|---|---|
-| `gemv_i32 input needs a 16-byte header; received ...` | 헤더가 없거나 짧음 | `u32 m, u32 n, i32 alpha, i32 beta`를 앞에 씀 |
-| `gemv_i32 needs m >= 1 and n >= 1, ...` | 크기가 0 | 헤더의 `m`, `n` 확인 |
-| `gemv_i32 header says m=..., n=..., which is ... bytes; received ...` | 헤더와 파일 길이가 다름 | 파일 길이 = `16 + 4·(m·n + n + m)` |
-| `gemv_i32 matrix of ...x... does not fit one 256 MiB HBM bank` | 행렬이 너무 큼 | 고객을 나눠 여러 번 실행 |
-| numpy 결과와 다름 | numpy를 int32로 바로 곱해 중간값 처리가 다름, 또는 행/열 순서 | 4.5처럼 `baseline.py`(int64로 곱한 뒤 int32로 자름)와 비교. `A`는 행 우선 |
-| `... requires an environment variable for include path '${VITIS_LIBRARIES}/...'` (`isc check`) | `VITIS_LIBRARIES` 미설정 | `export VITIS_LIBRARIES=[경로]` 후 다시 검사 |
-
-## 7. 검증 기록
-
-### 7.1. 플랫폼 자체 테스트
-
-| 항목 | 내용 |
-|---|---|
-| 확인일 | 2026-11-05 (시나리오 검증), 2026-11-10 (이 문서 절차 재실행) |
-| 환경 | Ubuntu 22.04.5 LTS (커널 6.8.0-138), Python 3.10.12, Vitis 2025.1, XRT 2.19.194 (2025.1), Vitis Libraries `v2025.1_update2` (커밋 b2c657d), AMD Alveo U50 (`xilinx_u50_gen3x16_xdma_base_5`), 저장소 기준 커밋 `3237e67` + 이 연산 폴더(커밋 전) |
-| 시나리오 검증 (11-05) | 모듈 `loan_score`, 대출 점수 512×64 (y = Ax + 600). hw = hw_emu 일치(플랫폼 대조 PASS), numpy와 바이트 일치 — 실행 `20261105T171642-107156` |
-| 이 문서 절차 (11-10) | 4.1~4.6을 저장소 루트에서 그대로 실행. 입력 `credit_512x64.bin` (133,392바이트, sha256 `0e6bb4f8…`). hw_emu `20261110T105025-235709` = CPU 참조 바이트 일치. hw `20261110T105407-51b6c2` = hw_emu(플랫폼 대조 PASS) = CPU 참조 바이트 일치 |
-| 빌드 | hw 빌드 약 47분 (2026-11-04), 타이밍 미달로 인한 클럭 축소 없음 |
-| 추가 크기 확인 | 64×130 (α=3, β=−2, `n`이 4의 배수가 아닌 경우) — hw_emu = numpy 바이트 일치, hw = hw_emu (플랫폼 대조 PASS) |
-| 확인하지 않은 것 | 성능(가속 효과). 1024×4096 같은 큰 행렬 |
-
-### 7.2. 공식 라이브러리 테스트
-
-**미실행** — 공식 문서가 가리키는 GEMV 벤치마크(`L2/benchmarks/streamingKernel/gemvStreamCh16`)가 2024.2·2025.1 저장소에 없습니다. L3는 CPU·GPU 비교용이고, L1 `tests/hw/gemv`는 HLS 단독 시험(카드 실행 없음)입니다. 그래서 L1 테스트 top과 같은 구성을 플랫폼 연산으로 만들어 7.1로 검증했습니다.
+- `--csv`로 저장한 파일(`customer,score`)이 고객별 점수표입니다. 순서는 입력 행렬의 행 순서와 같습니다.
+- 행렬이 HBM 뱅크 하나에 들어가지 않으면 고객을 나눠 여러 번 실행합니다. 고객 수가 바뀌어도 다시 빌드하지 않습니다.
+- 터미널 출력을 파일로도 남기려면 명령 뒤에 `2>&1 | tee [로그 파일]`을 붙입니다.

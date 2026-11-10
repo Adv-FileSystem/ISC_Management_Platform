@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""snappy_compress 입력 파일 만들기 (README 4.1).
+"""snappy_compress 입력 파일 만들기 (README 2.1).
 
-    python3 isc/operations/snappy_compress/examples/make_input.py           # 예시 → datasets/pscen/kafka_events_200k.bin
+    python3 isc/operations/snappy_compress/examples/make_input.py           # 예시 → datasets/snappy_compress/kafka_events_200k.bin
     python3 isc/operations/snappy_compress/examples/make_input.py -o 경로    # 저장 위치 바꾸기
 
 실제 메시지 묶음 파일은 변환할 필요가 없습니다. 그 파일을 바로 `isc run ... --input`에 넘기십시오.
@@ -15,7 +15,7 @@ import random
 import struct
 from pathlib import Path
 
-DEFAULT_OUTPUT = "datasets/pscen/kafka_events_200k.bin"
+DEFAULT_OUTPUT = "datasets/snappy_compress/kafka_events_200k.bin"
 
 
 # ── [바꾸는 곳] 데이터 ─────────────────────────────────────────────

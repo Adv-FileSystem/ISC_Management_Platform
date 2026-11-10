@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""vector_topk 입력 파일 만들기 (README 4.1).
+"""vector_topk 입력 파일 만들기 (README 2.1).
 
     python3 isc/operations/vector_topk/examples/make_input.py           # 예시 데이터 → datasets/vector_topk/docs.bin
     python3 isc/operations/vector_topk/examples/make_input.py -o 경로    # 저장 위치 바꾸기
