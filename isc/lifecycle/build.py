@@ -113,6 +113,8 @@ def build(workspace: Workspace, manifest: Manifest, target: str, *,
                 workspace, stage, operation=manifest.operation_id, target=target, fingerprint=key),
         ))
     except BackendError as exc:
+        if manifest.has_user_logic:
+            raise BackendError(f"{exc}\nyour logic file: {manifest.logic_source}") from exc
         if not manifest.is_hook:
             raise
         # 합성기가 지적하는 곳은 사용자가 쓰지 않은 소스일 수 있다. 어디 있는지 알려 준다.
@@ -132,10 +134,21 @@ def build(workspace: Workspace, manifest: Manifest, target: str, *,
 
 
 def _prepare_kernel_source(manifest: Manifest, directory: Path) -> Path:
-    """Render a hook's platform wrapper for its types and stage it with the user's header."""
+    """Render a hook's platform wrapper for its types and stage it with the user's header.
+
+    A built-in operation with a user function is staged the same way: its kernel includes
+    the header by name, so the kernel and the user's file (or the starter, which keeps the
+    original result) are copied side by side.
+    """
     hook = manifest.hook
     if hook is None:
-        return manifest.kernel_source
+        staged = manifest.staged_logic
+        if staged is None:
+            return manifest.kernel_source
+        kernel = directory / manifest.kernel_source.name
+        shutil.copyfile(manifest.kernel_source, kernel)
+        shutil.copyfile(staged, directory / str(manifest.operation.user_logic_spec["staged_header"]))
+        return kernel
 
     wrapper = directory / f"{manifest.kernel.name}.cpp"
     wrapper.write_text(render_kernel(manifest.kernel_source.read_text(), manifest.hook_types()))

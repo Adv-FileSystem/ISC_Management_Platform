@@ -28,13 +28,37 @@ def _check_module_id(module_id: str) -> None:
 
 def create_module(workspace: Workspace, module_id: str, *, operation_id: str,
                   name: str | None = None,
-                  parameters: dict[str, Any] | None = None) -> Path:
+                  parameters: dict[str, Any] | None = None,
+                  logic_file: Path | None = None, logic_starter: bool = False) -> Path:
+    """Add the user's function to an operation that opens one (`user_logic:`).
+
+    `logic_file` copies a file the user already wrote; `logic_starter` puts the operation's
+    starter in the module as `logic.hpp` (unchanged it keeps the original result).
+    """
     _check_module_id(module_id)
     operation = get_operation(operation_id)
     resolved_parameters = operation.resolve_parameters(parameters)
     destination = workspace.modules_dir / module_id
     if destination.exists():
         raise FileExistsError(f"module already exists: {destination}")
+    logic_name: str | None = None
+    if logic_file is not None and logic_starter:
+        raise ValueError("give either a logic file or the starter, not both")
+    if logic_starter:
+        logic_text = render_operation_starter(operation)
+        logic_name = "logic.hpp"
+    if logic_file is not None:
+        if not operation.has_user_logic:
+            raise ValueError(
+                f"operation {operation.id!r} has no user logic function; drop --logic"
+            )
+        logic_file = Path(logic_file)
+        if not logic_file.is_file():
+            raise FileNotFoundError(f"logic file not found: {logic_file}")
+        logic_name = logic_file.name
+        if logic_name in ("module.yaml", "README.md"):
+            raise ValueError(f"rename the logic file; {logic_name} is used by the module")
+        logic_text = logic_file.read_text()
 
     manifest: dict[str, Any] = {
         "module": {
@@ -47,16 +71,27 @@ def create_module(workspace: Workspace, module_id: str, *, operation_id: str,
             "version": operation.version,
         },
     }
+    if logic_name is not None:
+        manifest["operation"]["logic"] = logic_name
     if resolved_parameters:
         manifest["parameters"] = resolved_parameters
     destination.mkdir(parents=True)
+    if logic_name is not None:
+        (destination / logic_name).write_text(logic_text)
     (destination / "module.yaml").write_text(
         yaml.safe_dump(manifest, sort_keys=False, allow_unicode=True)
     )
     (destination / "README.md").write_text(
-        _module_readme(module_id, operation, resolved_parameters)
+        _module_readme(module_id, operation, resolved_parameters, logic_name)
     )
     return destination
+
+
+def render_operation_starter(operation: OperationSpec) -> str:
+    """The user logic starter of a built-in operation; unchanged it keeps the original result."""
+    if not operation.has_user_logic:
+        raise ValueError(f"operation {operation.id!r} has no user logic function")
+    return operation.user_logic_template.read_text()
 
 
 def render_profile_starter(profile: OperationSpec, in_type: str = "u32",
@@ -238,11 +273,29 @@ def create_module_from_logic(workspace: Workspace, logic_path: str | Path, *,
 
 
 def _module_readme(module_id: str, operation: OperationSpec,
-                   parameters: dict[str, Any]) -> str:
+                   parameters: dict[str, Any], logic_name: str | None = None) -> str:
     parameter_lines = (
         "\n".join(f"- `{name}`: `{value}`" for name, value in parameters.items())
         if parameters else "- 설정 가능한 파라미터가 없습니다."
     )
+    logic_section = ""
+    if operation.has_user_logic:
+        functions = "\n".join(
+            f"- `{item['signature']}` — {item.get('when', '')}"
+            for item in operation.user_logic_spec["functions"]
+        )
+        current = (f"이 모듈은 `{logic_name}`의 함수를 씁니다. 그 파일의 `return` 줄만 고치십시오."
+                   if logic_name else
+                   "이 모듈은 로직 파일 없이 원래 연산을 그대로 씁니다. 로직을 넣으려면 "
+                   f"`isc template {operation.id} -o 파일.hpp`로 시작 파일을 받아 고친 뒤 "
+                   f"`isc new <모듈> --operation {operation.id} --logic 파일.hpp`로 만드십시오.")
+        logic_section = f"""
+## 사용자 로직
+
+{functions}
+
+{current}
+"""
     return f"""# {module_id}
 
 이 모듈은 ISC 내장 `{operation.id}` 연산을 사용합니다.
@@ -255,7 +308,7 @@ def _module_readme(module_id: str, operation: OperationSpec,
 
 하드웨어 커널, 메모리 인터페이스와 호스트 어댑터는 ISC가 관리합니다. 이 모듈에서는
 `module.yaml`에 연산이 허용한 파라미터만 설정하십시오.
-
+{logic_section}
 ## 실행
 
 ```bash

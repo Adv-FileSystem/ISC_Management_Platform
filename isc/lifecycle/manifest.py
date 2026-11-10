@@ -75,6 +75,7 @@ class Manifest:
     validation_reference_target: str
     directory: Path
     hook: HookSpec | None = None
+    logic: str | None = None      # built-in operation + the user's function file (module-relative)
 
     @property
     def operation_id(self) -> str:
@@ -104,10 +105,30 @@ class Manifest:
         return (self.directory / self.hook.source).resolve()
 
     @property
+    def has_user_logic(self) -> bool:
+        """True when this module adds the user's function to a built-in operation."""
+        return self.logic is not None
+
+    @property
+    def logic_source(self) -> Path:
+        if self.logic is None:
+            raise ManifestError(f"module {self.id!r} has no user logic file")
+        return (self.directory / self.logic).resolve()
+
+    @property
+    def staged_logic(self) -> Path | None:
+        """The header compiled next to the kernel: the user's file, else the starter (original result)."""
+        if not self.operation.has_user_logic:
+            return None
+        return self.logic_source if self.has_user_logic else self.operation.user_logic_template
+
+    @property
     def source_files(self) -> list[Path]:
         sources = [self.kernel_source]
         if self.is_hook:
             sources.append(self.hook_source)
+        if self.staged_logic is not None:
+            sources.append(self.staged_logic)
         return sources
 
     @property
@@ -188,6 +209,12 @@ class Manifest:
             },
             "directory": str(self.directory),
         }
+        if self.operation.has_user_logic:
+            result["logic"] = {
+                "source": self.logic,
+                "functions": [item["signature"]
+                              for item in self.operation.user_logic_spec["functions"]],
+            }
         if self.hook is not None:
             result["hook"] = {
                 "profile": self.hook.profile,
@@ -265,6 +292,21 @@ class Manifest:
                 symbol=str(operation.hook_spec["symbol"]),
                 staged_header=str(operation.hook_spec["staged_header"]),
             )
+        logic: str | None = None
+        if not has_hook and selection.get("logic"):
+            logic = str(selection["logic"])
+            if not operation.has_user_logic:
+                raise ManifestError(
+                    f"operation {operation_id!r} has no user logic function; "
+                    "remove operation.logic from module.yaml"
+                )
+            logic_path = (directory / logic).resolve()
+            try:
+                logic_path.relative_to(directory)
+            except ValueError as exc:
+                raise ManifestError("operation.logic must stay inside the module directory") from exc
+            if not logic_path.is_file():
+                raise ManifestError(f"user logic file not found: {logic_path}")
         supplied_parameters = raw.get("parameters") or {}
         if not isinstance(supplied_parameters, dict):
             raise ManifestError("parameters must be a mapping")
@@ -326,6 +368,7 @@ class Manifest:
                 validation_raw.get("reference_target", DEFAULT_REFERENCE_TARGET)
             ),
             hook=hook,
+            logic=logic,
             directory=directory,
         )
         if not manifest.kernel_source.is_file():

@@ -1,11 +1,11 @@
 operation:
   id: graph_twohop
   name: Two-hop path count (Vitis Graph)
-  version: "1.0"
+  version: "1.1"
   category: graph
   description: >-
     그래프(CSR)에서 정점 쌍마다 2-hop 경로(src → x → dst) 수를 셉니다. Vitis Graph L2 twoHop 을
-    감싼 프로토타입 연산입니다.
+    감싼 프로토타입 연산입니다. 쌍마다 결과를 정하는 사용자 함수 isc_score 를 넣을 수 있습니다.
 
 input:
   representation: binary
@@ -15,11 +15,20 @@ input:
 
 output:
   representation: binary
-  # u32 count[P]
+  # u32 score[P] (로직 파일이 없으면 count[P])
   format: isc_u32_vector
   variable_size: true
 
 parameters: {}
+
+# 1.1: twoHop 뒤에 사용자 함수 자리. 로직 파일이 없으면 시작 파일(count 그대로)로 빌드되어 1.0 과 같은 결과.
+user_logic:
+  template: logic.hpp.template
+  staged_header: isc_user_logic.hpp
+  functions:
+    - symbol: isc_score
+      signature: "uint32_t isc_score(uint32_t src, uint32_t dst, uint32_t count)"
+      when: "쌍마다 1번, twoHop 이 공통 이웃 수(count)를 센 직후. 반환값이 그 쌍의 출력"
 
 baseline:
   equivalence: exact

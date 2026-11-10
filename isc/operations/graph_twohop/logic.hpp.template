@@ -1,0 +1,17 @@
+// ISC 사용자 로직 — graph_twohop (Vitis Graph L2 xf::graph::twoHop)
+//
+// 호출 시점: 쌍(src, dst)마다 1번. twoHop 이 src -> x -> dst 경로 수(count)를 센 직후.
+// 입력: src, dst = 쌍의 정점 번호(0부터), count = 2-hop 경로 수 (= 공통 이웃 수)
+// 출력: 이 쌍의 결과 값 (출력 파일의 u32 하나, 입력 쌍 순서대로)
+//
+// 고치는 곳: return 줄만. 함수 이름과 인자·반환 타입은 바꾸지 마십시오 (인자 이름은 자유).
+// 예)  return count >= 3 ? count * 10 : 0;       // 공통 이웃 3개 이상만 점수, 나머지 0
+//      return dst >= 900 ? count + 5 : count;    // 특정 번호 범위에 가산점
+// 쓸 수 없는 것: 동적 할당, 파일 입출력, HLS INTERFACE 지시어. 다른 쌍의 값은 볼 수 없습니다.
+#pragma once
+
+#include <stdint.h>
+
+inline uint32_t isc_score(uint32_t src, uint32_t dst, uint32_t count) {
+    return count;   // ISC-TODO: 규칙으로 바꾸십시오 (지금은 원래 연산과 같은 결과)
+}

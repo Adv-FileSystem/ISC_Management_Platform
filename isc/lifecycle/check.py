@@ -12,7 +12,7 @@ from pathlib import Path
 
 from isc.operations import baseline as baseline_module
 from isc.backends import backend_names
-from isc.generator.generate import TODO_MARKER, strip_comments
+from isc.generator.generate import TODO_MARKER, SignatureError, check_fixed_signature, strip_comments
 from isc.operations.loader import ModuleCodeError, load_file
 from isc.lifecycle.manifest import Manifest, ManifestError
 
@@ -68,6 +68,13 @@ def check_module(directory: Path) -> CheckReport:
 
     if manifest.is_hook:
         _check_hook_source(report, manifest)
+    if manifest.has_user_logic:
+        _check_user_logic(report, manifest)
+    elif manifest.operation.has_user_logic:
+        report.notes.append(
+            "no user logic file: the original operation runs unchanged "
+            f"(add one with `isc template {manifest.operation_id}`)"
+        )
 
     _check_baseline(report, manifest)
 
@@ -103,17 +110,37 @@ def _check_hook_source(report: CheckReport, manifest: Manifest) -> None:
             "replace the placeholder body with your logic"
         )
 
-    forbidden = (
-        (r"#\s*pragma\s+HLS\s+INTERFACE", "HLS interface pragmas"),
-        (r"\b(?:malloc|calloc|realloc|free|fopen|open|socket)\s*\(",
-         "dynamic allocation or host I/O"),
-        (r"\bnew\s+", "dynamic allocation"),
-    )
-    for pattern, label in forbidden:
+    _check_forbidden(report, source, "hook source", "the profile owns data movement")
+
+
+_FORBIDDEN = (
+    (r"#\s*pragma\s+HLS\s+INTERFACE", "HLS interface pragmas"),
+    (r"\b(?:malloc|calloc|realloc|free|fopen|open|socket)\s*\(",
+     "dynamic allocation or host I/O"),
+    (r"\bnew\s+", "dynamic allocation"),
+)
+
+
+def _check_forbidden(report: CheckReport, source: str, what: str, why: str) -> None:
+    for pattern, label in _FORBIDDEN:
         if re.search(pattern, source):
-            report.problems.append(
-                f"hook source contains unsupported {label}; the profile owns data movement"
-            )
+            report.problems.append(f"{what} contains unsupported {label}; {why}")
+
+
+def _check_user_logic(report: CheckReport, manifest: Manifest) -> None:
+    raw = manifest.logic_source.read_text()
+    for item in manifest.operation.user_logic_spec["functions"]:
+        try:
+            check_fixed_signature(raw, str(item["signature"]))
+        except SignatureError as exc:
+            report.problems.append(f"{manifest.logic}: {exc}")
+    if TODO_MARKER in raw:
+        report.warnings.append(
+            f"{manifest.logic} still has the starter marker {TODO_MARKER}; "
+            "the original result is kept until you change the return line"
+        )
+    _check_forbidden(report, strip_comments(raw), manifest.logic,
+                     "the operation owns data movement")
 
 
 def _check_baseline(report: CheckReport, manifest: Manifest) -> None:

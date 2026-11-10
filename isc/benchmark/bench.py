@@ -364,6 +364,10 @@ def _measure_baseline(manifest: Manifest, experiment: Experiment, cells: list[Ce
                       inputs: dict[int, Path], *, say: Reporter) -> None:
     operation = manifest.operation
     available, reason = baseline_module.probe(operation, manifest.parameters)
+    if available and manifest.has_user_logic:
+        # 기준선은 원래 연산만 계산한다. 사용자 함수가 바꾼 결과와 비교하면 틀린 판정이 된다.
+        available, reason = False, (f"{manifest.logic} 의 사용자 로직은 CPU 기준선에 없습니다 "
+                                    "(로직 없이 만든 모듈로 가속을 측정하십시오)")
     if not available:
         say(f"[{manifest.id}] CPU 기준선 없음 -- {reason}")
         for cell in cells:
