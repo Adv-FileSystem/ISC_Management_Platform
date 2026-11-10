@@ -36,6 +36,7 @@ kernel:
   memory:
     - {port: m_axi_gmem0, bank: 0}
     - {port: m_axi_gmem1, bank: 1}
+    - {port: m_axi_gmem2, bank: 1}
 
 build:
   platform: xilinx_u50_gen3x16_xdma_5_202210_1
