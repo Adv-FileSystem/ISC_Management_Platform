@@ -17,7 +17,7 @@ FLAG_LZ4 = 0
 FLAG_STORED = 1
 
 # 커널 인자 인덱스 (operation.yaml의 kernel.arguments 순서와 같다)
-ARG_IN, ARG_OUT, ARG_INPUT_SIZE, ARG_OUTPUT_SIZE, ARG_OVERFLOW = range(5)
+ARG_IN, ARG_OUT, ARG_INPUT_SIZE, ARG_OUTPUT_SIZE, ARG_OVERFLOW, ARG_STAGED = range(6)
 
 
 def worst_case_size(size: int) -> int:
@@ -34,6 +34,7 @@ def execute(session, data: bytes, parameters: dict) -> bytes:
     bo_out = session.buffer(worst_case_size(block_size), arg=ARG_OUT)
     bo_size = session.buffer(4, arg=ARG_OUTPUT_SIZE)
     bo_overflow = session.buffer(4, arg=ARG_OVERFLOW)
+    bo_staged = session.buffer(block_size, arg=ARG_STAGED)      # 블록에 isc_pre 를 적용한 바이트
 
     framed = bytearray()
     stored_blocks = 0
@@ -41,16 +42,17 @@ def execute(session, data: bytes, parameters: dict) -> bytes:
     for offset in range(0, len(data), block_size):
         block = data[offset:offset + block_size]
         bo_in.write(block)
-        session.run(bo_in, bo_out, len(block), bo_size, bo_overflow)
+        session.run(bo_in, bo_out, len(block), bo_size, bo_overflow, bo_staged)
 
         compressed_size = int.from_bytes(bo_size.read(4), "little")
         overflow = int.from_bytes(bo_overflow.read(4), "little")
 
         # overflow 가 서면 커널이 리터럴 초과분을 조용히 버렸으므로 출력을
         # 신뢰할 수 없다. 압축이 이득이 없을 때도 마찬가지로 원본을 저장한다.
+        # 저장하는 원본은 isc_pre 를 거친 바이트(staged)다. 사용자 로직이 없으면 block 과 같다.
         if overflow or not 0 < compressed_size < len(block):
             framed += HEADER.pack(len(block), len(block), FLAG_STORED)
-            framed += block
+            framed += bo_staged.read(len(block))
             stored_blocks += 1
         else:
             framed += HEADER.pack(len(block), compressed_size, FLAG_LZ4)

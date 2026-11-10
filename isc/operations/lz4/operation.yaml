@@ -1,9 +1,11 @@
 operation:
   id: lz4
   name: LZ4 Block Compression
-  version: "1.0"
+  version: "1.1"
   category: compression
-  description: 임의 파일을 독립적인 LZ4 블록으로 압축합니다.
+  description: >-
+    임의 파일을 독립적인 LZ4 블록으로 압축합니다. 압축 전 바이트마다 사용자 함수 isc_pre 를
+    넣을 수 있습니다.
 
 input:
   representation: raw_bytes
@@ -26,6 +28,14 @@ parameters:
     minimum: 1024
     maximum: 65536
 
+user_logic:
+  template: logic.hpp.template
+  staged_header: isc_user_logic.hpp
+  functions:
+    - symbol: isc_pre
+      signature: "uint8_t isc_pre(uint8_t b)"
+      when: "입력 바이트마다 1번, 압축하기 직전. 반환값이 압축되는 바이트"
+
 baseline:
   # CPU LZ4 와 장치 커널은 서로 다른, 그러나 둘 다 올바른 블록을 낸다.
   # 성능 비교에만 쓰고 정확성 대조에는 쓰지 않는다.
@@ -47,9 +57,11 @@ kernel:
     - {name: input_size, kind: scalar, direction: in}
     - {name: output_size, kind: buffer, direction: out}
     - {name: literal_overflow, kind: buffer, direction: out}
+    - {name: staged, kind: buffer, direction: out}
   memory:
     - {port: m_axi_gmem0, bank: 0}
     - {port: m_axi_gmem1, bank: 1}
+    - {port: m_axi_gmem2, bank: 2}
 
 build:
   platform: xilinx_u50_gen3x16_xdma_5_202210_1

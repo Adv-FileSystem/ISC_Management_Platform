@@ -24,6 +24,7 @@
 #include "lz_optional.hpp"
 #include "mm2s.hpp"
 #include "s2mm.hpp"
+#include "isc_user_logic.hpp"
 
 namespace {
 
@@ -89,6 +90,19 @@ void lz4CompressBlock(const ap_uint<8>* in,
                                                                      compressedSizeStream, output_size);
 }
 
+// Every input byte goes through the user function isc_pre before compression. The converted
+// block is written to `staged` first (a plain sequential pass, outside any dataflow region) and
+// compressed from there, so the host can store the converted bytes when compression does not pay.
+void userPre(const ap_uint<8>* in, ap_uint<8>* staged, uint32_t input_size) {
+ISC_USER_PRE:
+    for (uint32_t i = 0; i < input_size; i++) {
+#pragma HLS PIPELINE II = 1
+#pragma HLS LOOP_TRIPCOUNT min = 1 max = 65536
+        uint8_t b = in[i];
+        staged[i] = isc_pre(b);
+    }
+}
+
 }  // namespace
 
 extern "C" {
@@ -109,13 +123,17 @@ extern "C" {
  *        `out`/`output_size` for this block are not trustworthy. The host
  *        (lz4_adapter.cpp) must fall back to storing the block's raw input
  *        bytes instead of using this kernel's output when this is set.
+ * @param staged the block after isc_pre (input_size bytes); this is what gets compressed, and
+ *        what the host stores when it falls back to a raw block.
  */
 void lz4_compress(const ap_uint<8>* in, ap_uint<8>* out, uint32_t input_size, uint32_t* output_size,
-                  uint32_t* literal_overflow) {
+                  uint32_t* literal_overflow, ap_uint<8>* staged) {
 #pragma HLS INTERFACE m_axi port = in offset = slave bundle = gmem0
 #pragma HLS INTERFACE m_axi port = out offset = slave bundle = gmem1
 #pragma HLS INTERFACE m_axi port = output_size offset = slave bundle = gmem1
 #pragma HLS INTERFACE m_axi port = literal_overflow offset = slave bundle = gmem1
+#pragma HLS INTERFACE m_axi port = staged offset = slave bundle = gmem2
+#pragma HLS INTERFACE s_axilite port = staged bundle = control
 #pragma HLS INTERFACE s_axilite port = in bundle = control
 #pragma HLS INTERFACE s_axilite port = out bundle = control
 #pragma HLS INTERFACE s_axilite port = output_size bundle = control
@@ -124,7 +142,8 @@ void lz4_compress(const ap_uint<8>* in, ap_uint<8>* out, uint32_t input_size, ui
 #pragma HLS INTERFACE s_axilite port = return bundle = control
 
     uint32_t max_lit_limit[kParallelBlock] = {0};
-    lz4CompressBlock(in, out, input_size, output_size, max_lit_limit);
+    userPre(in, staged, input_size);
+    lz4CompressBlock(staged, out, input_size, output_size, max_lit_limit);
     literal_overflow[0] = max_lit_limit[0];
 }
 
