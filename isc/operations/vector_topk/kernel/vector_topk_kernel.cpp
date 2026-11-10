@@ -4,9 +4,14 @@
  * Speed is not a goal. The kernel exists so that hw_emu, hw and the CPU baseline can be held to
  * the same bytes: a score is the int32 sum of int8 products, and the result is ordered by
  * (score descending, id ascending), a total order, so there is exactly one correct answer.
+ * Each row's inner product goes through the user function isc_score before ranking
+ * (isc_user_logic.hpp, staged by ISC from the module's logic file or the operation's starter).
+ * A row whose score is INT32_MIN is never ranked.
  */
 #include <ap_int.h>
 #include <stdint.h>
+
+#include "isc_user_logic.hpp"
 
 namespace {
 
@@ -84,9 +89,11 @@ scan_rows:
             score += partial;
         }
 
+        const uint32_t id = id_base + r;
+        score = isc_score(id, score);
+
         // Insert before the first slot this row STRICTLY beats. Rows arrive in id order, so a tie
         // stays behind the row that came first: (score descending, id ascending).
-        const uint32_t id = id_base + r;
     insert:
         for (int i = kMaxK - 1; i >= 0; --i) {
 #pragma HLS UNROLL

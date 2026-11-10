@@ -1,11 +1,11 @@
 operation:
   id: vector_topk
   name: Vector Top-K (inner product)
-  version: "1.0"
+  version: "1.1"
   category: retrieval
   description: >-
-    질의 벡터 하나와 행렬의 정수 내적이 큰 상위 k개 (id, score) 를 찾습니다.
-    RAG 의 검색 단계에 해당하는 검증용 연산이며 합성 임베딩으로 시험합니다.
+    질의 벡터 하나와 행렬의 정수 내적이 큰 상위 k개 (id, score) 를 찾습니다 (RAG 의 검색 단계).
+    문서마다 순위 점수를 정하는 사용자 함수 isc_score 를 넣을 수 있습니다.
 
 input:
   representation: binary
@@ -35,6 +35,14 @@ parameters:
     default: 16777216
     minimum: 4096
     maximum: 134217728
+
+user_logic:
+  template: logic.hpp.template
+  staged_header: isc_user_logic.hpp
+  functions:
+    - symbol: isc_score
+      signature: "int32_t isc_score(uint32_t id, int32_t dot)"
+      when: "문서(행)마다 1번, 내적을 계산한 직후·순위를 매기기 전. 반환값이 순위 점수 (INT32_MIN 이면 제외)"
 
 baseline:
   # 정수 내적과 전순서라서 장치 출력과 바이트까지 같아야 한다.
