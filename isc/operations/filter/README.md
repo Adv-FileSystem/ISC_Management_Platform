@@ -44,14 +44,18 @@
 (예: numpy `arr.astype("<u4").tofile(경로)`).
 
 ```bash
-mkdir -p datasets/filter
-python3 - <<'EOF'
-import random, struct
-rng = random.Random(5)
-amounts = [rng.randint(0, 9999) for _ in range(10000)]
-open("datasets/filter/amounts.bin", "wb").write(struct.pack(f"<{len(amounts)}I", *amounts))
-EOF
+python3 isc/operations/filter/examples/make_input.py
 ```
+
+입력 파일은 [`examples/make_input.py`](examples/make_input.py)가 만듭니다. 스크립트는 두 부분으로 나뉩니다.
+
+| 부분 | 하는 일 | 사용자 |
+|---|---|---|
+| `make_sample()` | 예시 데이터를 만듦 | **바꾸는 곳** — 자기 데이터로 바꿈 |
+| `encode()` | 2절의 입력 형식(헤더·엔디안·타입)대로 바이트를 씀 | 고치지 않음 |
+
+- 내 CSV의 한 열을 변환: `python3 isc/operations/filter/examples/make_input.py --csv 내파일.csv --column amount -o datasets/filter/my.bin`
+- 저장 위치를 바꾸려면 `-o 경로`를 붙입니다.
 
 ### 4.2. 로직 파일 만들기
 

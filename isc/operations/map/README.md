@@ -44,14 +44,18 @@
 -10 ~ 140 °C 사이 온도 10,000개(소수 둘째 자리, 고정 시드)를 `f32` little-endian으로 씁니다. 범위 밖 값도 일부러 넣어 포화 처리를 확인합니다.
 
 ```bash
-mkdir -p datasets/map
-python3 - <<'EOF'
-import random, struct
-rng = random.Random(9)
-temps = [round(rng.uniform(-10.0, 140.0), 2) for _ in range(10000)]
-open("datasets/map/temps.bin", "wb").write(struct.pack(f"<{len(temps)}f", *temps))
-EOF
+python3 isc/operations/map/examples/make_input.py
 ```
+
+입력 파일은 [`examples/make_input.py`](examples/make_input.py)가 만듭니다. 스크립트는 두 부분으로 나뉩니다.
+
+| 부분 | 하는 일 | 사용자 |
+|---|---|---|
+| `make_sample()` | 예시 데이터를 만듦 | **바꾸는 곳** — 자기 데이터로 바꿈 |
+| `encode()` | 2절의 입력 형식(헤더·엔디안·타입)대로 바이트를 씀 | 고치지 않음 |
+
+- 내 CSV의 한 열을 변환: `python3 isc/operations/map/examples/make_input.py --csv 내파일.csv --column temp -o datasets/map/my.bin`
+- 저장 위치를 바꾸려면 `-o 경로`를 붙입니다.
 
 ### 4.2. 로직 파일 만들기
 

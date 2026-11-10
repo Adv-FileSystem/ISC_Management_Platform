@@ -42,17 +42,23 @@
 배포 파일 대신 100,000바이트 무작위 파일(고정 시드)을 만들고, 기준값을 `sha256sum`으로 구합니다.
 
 ```bash
-mkdir -p datasets/sha256
-python3 - <<'EOF'
-import random
-open("datasets/sha256/release.bin", "wb").write(random.Random(3).randbytes(100_000))
-EOF
+python3 isc/operations/sha256/examples/make_input.py
 sha256sum datasets/sha256/release.bin
 ```
 
 ```text
 7797dff7d2096d2c76dab4f8ea8958d31faa80991945d7988b3cc0651acae850  datasets/sha256/release.bin
 ```
+
+입력 파일은 [`examples/make_input.py`](examples/make_input.py)가 만듭니다. 스크립트는 두 부분으로 나뉩니다.
+
+| 부분 | 하는 일 | 사용자 |
+|---|---|---|
+| `make_sample()` | 예시 데이터를 만듦 | **바꾸는 곳** — 자기 데이터로 바꿈 |
+| `encode()` | 2절의 입력 형식(헤더·엔디안·타입)대로 바이트를 씀 | 고치지 않음 |
+
+- 실제 파일은 변환할 필요가 없습니다. 이 단계를 건너뛰고 그 파일을 바로 `--input`에 넘깁니다.
+- 저장 위치를 바꾸려면 `-o 경로`를 붙입니다.
 
 ### 4.2. 모듈 만들기
 

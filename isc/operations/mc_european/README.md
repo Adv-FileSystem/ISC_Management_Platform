@@ -42,22 +42,22 @@
 보유 옵션 8건(콜 4, 풋 4)을 만듭니다. 6건은 공식 테스트의 조건표에 있는 조합이고, 2건(`T=0.5`, `T=2`)은 그 밖의 조합입니다.
 
 ```bash
-mkdir -p datasets/pscen
-python3 - <<'EOF'
-import struct
-# S, K, sigma, q, r, T, type(0 콜, 1 풋)
-book = [(100, 75, 0.11, 0.00, 0.01, 1, 0), (100, 100, 0.50, 0.00, 0.05, 1, 0), (100, 125, 1.20, 0.05, 0.15, 1, 0),
-        (100, 100, 0.30, 0.02, 0.03, 0.5, 0), (100, 75, 0.11, 0.00, 0.01, 1, 1), (100, 100, 0.50, 0.00, 0.05, 1, 1),
-        (100, 125, 1.20, 0.05, 0.15, 1, 1), (100, 110, 0.25, 0.01, 0.04, 2, 1)]
-data = struct.pack("<II", len(book), 0) + b"".join(struct.pack("<8f", *o, 0.0) for o in book)
-open("datasets/pscen/option_book_8.bin", "wb").write(data)
-print(len(book), "options,", len(data), "bytes")
-EOF
+python3 isc/operations/mc_european/examples/make_input.py
 ```
 
 ```text
 8 options, 264 bytes
 ```
+
+입력 파일은 [`examples/make_input.py`](examples/make_input.py)가 만듭니다. 스크립트는 두 부분으로 나뉩니다.
+
+| 부분 | 하는 일 | 사용자 |
+|---|---|---|
+| `make_sample()` | 예시 데이터를 만듦 | **바꾸는 곳** — 자기 데이터로 바꿈 |
+| `encode()` | 2절의 입력 형식(헤더·엔디안·타입)대로 바이트를 씀 | 고치지 않음 |
+
+- 내 보유 옵션 CSV 변환: `python3 isc/operations/mc_european/examples/make_input.py --csv book.csv -o datasets/pscen/my_book.bin` (머리글 `S,K,sigma,q,r,T,type`, 한 줄에 옵션 1건)
+- 저장 위치를 바꾸려면 `-o 경로`를 붙입니다.
 
 ### 4.2. 모듈 만들기
 

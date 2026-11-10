@@ -42,35 +42,22 @@
 친구 1,000명 그래프(고정 시드)와 추천 후보 500쌍을 만듭니다. 쌍의 절반은 "친구의 친구이지만 아직 친구가 아닌" 사람, 나머지 절반은 무작위 대조군입니다.
 
 ```bash
-mkdir -p datasets/pscen
-python3 - <<'EOF'
-import random, struct
-rng = random.Random(11); V = 1000
-adj = [set() for _ in range(V)]
-for u in range(V):                      # 사람마다 무작위 친구 4명 (양방향)
-    for _ in range(4):
-        w = rng.randrange(V)
-        if w != u: adj[u].add(w); adj[w].add(u)
-off = [0]; idx = []
-for u in range(V): idx += sorted(adj[u]); off.append(len(idx))
-rng = random.Random(12); pairs = set()
-while len(pairs) < 250:                 # 친구의 친구(아직 친구 아님) = 추천 후보
-    s = rng.randrange(V); f = rng.choice(sorted(adj[s])); d = rng.choice(sorted(adj[f]))
-    if d != s and d not in adj[s]: pairs.add((s, d))
-while len(pairs) < 500:                 # 무작위 대조군
-    s, d = rng.randrange(V), rng.randrange(V)
-    if s != d and d not in adj[s]: pairs.add((s, d))
-pairs = sorted(pairs, key=lambda p: rng.random())
-data = (struct.pack("<IIII", V, len(idx), len(pairs), 0) + struct.pack(f"<{V+1}I", *off)
-        + struct.pack(f"<{len(idx)}I", *idx) + b"".join(struct.pack("<II", s, d) for s, d in pairs))
-open("datasets/pscen/friends_1000_fof.bin", "wb").write(data)
-print(f"V={V} E={len(idx)} P={len(pairs)} bytes={len(data)}")
-EOF
+python3 isc/operations/graph_twohop/examples/make_input.py
 ```
 
 ```text
 V=1000 E=7962 P=500 bytes=39868
 ```
+
+입력 파일은 [`examples/make_input.py`](examples/make_input.py)가 만듭니다. 스크립트는 두 부분으로 나뉩니다.
+
+| 부분 | 하는 일 | 사용자 |
+|---|---|---|
+| `make_sample()` | 예시 데이터를 만듦 | **바꾸는 곳** — 자기 데이터로 바꿈 |
+| `encode()` | 2절의 입력 형식(헤더·엔디안·타입)대로 바이트를 씀 | 고치지 않음 |
+
+- 내 데이터는 `make_sample()`이 돌려주는 값을 같은 모양으로 바꿔 넣습니다 (예: `np.load(...)`로 읽은 배열).
+- 저장 위치를 바꾸려면 `-o 경로`를 붙입니다.
 
 ### 4.2. 모듈 만들기
 

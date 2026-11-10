@@ -44,19 +44,18 @@
 문서 2,000개 × 64차원 int8 임베딩(고정 시드)을 만들고, 질의는 123번 문서와 같은 벡터로 둡니다(정답 1위가 123번이 되도록).
 
 ```bash
-mkdir -p datasets/vector_topk
-python3 - <<'EOF'
-import struct, numpy as np
-rng = np.random.default_rng(42)
-rows, dim = 2000, 64
-db = rng.integers(-128, 128, size=(rows, dim), dtype=np.int8)
-query = db[123].copy()                                  # 123번 문서와 같은 질의
-with open("datasets/vector_topk/docs.bin", "wb") as f:
-    f.write(struct.pack("<II", rows, dim))
-    f.write(query.tobytes())
-    f.write(db.tobytes())
-EOF
+python3 isc/operations/vector_topk/examples/make_input.py
 ```
+
+입력 파일은 [`examples/make_input.py`](examples/make_input.py)가 만듭니다. 스크립트는 두 부분으로 나뉩니다.
+
+| 부분 | 하는 일 | 사용자 |
+|---|---|---|
+| `make_sample()` | 예시 데이터를 만듦 | **바꾸는 곳** — 자기 데이터로 바꿈 |
+| `encode()` | 2절의 입력 형식(헤더·엔디안·타입)대로 바이트를 씀 | 고치지 않음 |
+
+- 내 데이터는 `make_sample()`이 돌려주는 값을 같은 모양으로 바꿔 넣습니다 (예: `np.load(...)`로 읽은 배열).
+- 저장 위치를 바꾸려면 `-o 경로`를 붙입니다.
 
 ### 4.2. 모듈 만들기
 

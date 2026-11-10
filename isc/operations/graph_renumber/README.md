@@ -45,20 +45,22 @@
 회원 5,000명이 0~4999 범위의 성긴 그룹 번호 300종 중 하나를 가진 목록을 만듭니다(고정 시드).
 
 ```bash
-mkdir -p datasets/pscen
-python3 - <<'EOF'
-import random, struct
-rng = random.Random(3); n = 5000
-groups = rng.sample(range(n), 300)          # 성긴 그룹 번호 300종 (0 <= id < N)
-ids = [rng.choice(groups) for _ in range(n)]
-open("datasets/pscen/members_5000.bin", "wb").write(struct.pack("<I", n) + struct.pack(f"<{n}i", *ids))
-print("ids", n, "distinct", len(set(ids)))
-EOF
+python3 isc/operations/graph_renumber/examples/make_input.py
 ```
 
 ```text
 ids 5000 distinct 300
 ```
+
+입력 파일은 [`examples/make_input.py`](examples/make_input.py)가 만듭니다. 스크립트는 두 부분으로 나뉩니다.
+
+| 부분 | 하는 일 | 사용자 |
+|---|---|---|
+| `make_sample()` | 예시 데이터를 만듦 | **바꾸는 곳** — 자기 데이터로 바꿈 |
+| `encode()` | 2절의 입력 형식(헤더·엔디안·타입)대로 바이트를 씀 | 고치지 않음 |
+
+- 내 데이터는 `make_sample()`이 번호 목록(list)을 돌려주도록 바꿉니다. 번호는 0 이상 N 미만이어야 합니다.
+- 저장 위치를 바꾸려면 `-o 경로`를 붙입니다.
 
 ### 4.2. 모듈 만들기
 

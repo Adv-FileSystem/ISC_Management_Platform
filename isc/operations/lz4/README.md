@@ -44,23 +44,23 @@
 웹 서버 접근 로그 형태의 텍스트 1,500줄(약 97 KiB, 고정 시드)을 만듭니다. 실제 로그를 쓸 때는 이 단계를 건너뜁니다.
 
 ```bash
-mkdir -p datasets/lz4
-python3 - <<'EOF'
-import random
-rng = random.Random(1)
-lines = []
-for i in range(1500):
-    level = rng.choice(["INFO", "INFO", "INFO", "WARN", "ERROR"])
-    path = rng.choice(["/api/orders", "/api/users", "/health", "/api/cart"])
-    lines.append(f"2026-11-05T10:{i // 60 % 60:02d}:{i % 60:02d}Z {level} GET {path} status=200 latency_ms={rng.randint(1, 900)}\n")
-open("datasets/lz4/service.log", "w").write("".join(lines))
-EOF
+python3 isc/operations/lz4/examples/make_input.py
 ls -l datasets/lz4/service.log
 ```
 
 ```text
 -rw-rw-r-- 1 ... 99503 ... datasets/lz4/service.log
 ```
+
+입력 파일은 [`examples/make_input.py`](examples/make_input.py)가 만듭니다. 스크립트는 두 부분으로 나뉩니다.
+
+| 부분 | 하는 일 | 사용자 |
+|---|---|---|
+| `make_sample()` | 예시 데이터를 만듦 | **바꾸는 곳** — 자기 데이터로 바꿈 |
+| `encode()` | 2절의 입력 형식(헤더·엔디안·타입)대로 바이트를 씀 | 고치지 않음 |
+
+- 실제 파일은 변환할 필요가 없습니다. 이 단계를 건너뛰고 그 파일을 바로 `--input`에 넘깁니다.
+- 저장 위치를 바꾸려면 `-o 경로`를 붙입니다.
 
 ### 4.2. 모듈 만들기
 

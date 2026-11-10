@@ -43,21 +43,18 @@
 상품 사진 대신 512×512 회색조 합성 영상(상품 몸체·뚜껑·라벨 글자 + 약한 잡음, 고정 시드)을 만듭니다.
 
 ```bash
-mkdir -p datasets/pscen
-python3 - <<'EOF'
-import struct, numpy as np, cv2
-rng = np.random.default_rng(7); h = w = 512
-a = np.full((h, w), 245.0)
-cv2.ellipse(a, (256, 280), (150, 110), 0, 0, 360, 90, -1)           # 상품 몸체
-cv2.rectangle(a, (200, 120), (312, 190), 140, -1)                   # 뚜껑
-cv2.putText(a, "ISC", (190, 300), cv2.FONT_HERSHEY_SIMPLEX, 2.5, 230, 6)   # 라벨
-a = np.clip(a + rng.normal(0, 3, a.shape), 0, 255).astype(np.uint8)
-open("datasets/pscen/product_512.bin", "wb").write(struct.pack("<II", h, w) + a.tobytes())
-print("ok", h, w)
-EOF
+python3 isc/operations/image_bicubic/examples/make_input.py
 ```
 
-실제 사진은 회색조로 읽어 같은 헤더를 붙이면 됩니다 (예: `cv2.imread(path, cv2.IMREAD_GRAYSCALE)`).
+입력 파일은 [`examples/make_input.py`](examples/make_input.py)가 만듭니다. 스크립트는 두 부분으로 나뉩니다.
+
+| 부분 | 하는 일 | 사용자 |
+|---|---|---|
+| `make_sample()` | 예시 데이터를 만듦 | **바꾸는 곳** — 자기 데이터로 바꿈 |
+| `encode()` | 2절의 입력 형식(헤더·엔디안·타입)대로 바이트를 씀 | 고치지 않음 |
+
+- 내 사진(PNG·JPEG 등) 변환: `python3 isc/operations/image_bicubic/examples/make_input.py --image 사진.jpg -o datasets/pscen/my_photo.bin` (회색조로 바꾸고 헤더를 붙임)
+- 저장 위치를 바꾸려면 `-o 경로`를 붙입니다.
 
 ### 4.2. 모듈 만들기
 
@@ -155,7 +152,7 @@ isc show [실행 ID]
 
 | 바꿀 것 | 방법 |
 |---|---|
-| 사진 | 회색조로 읽어 `u32 rows, u32 cols` 헤더를 붙인 파일을 `--input`으로 |
+| 사진 | 4.1 스크립트의 `--image 사진 -o 경로`로 변환한 파일을 `--input`으로 |
 | 썸네일 크기 | `modules/product_thumb/module.yaml`의 `out_rows`·`out_cols`를 바꾸거나, 크기별로 모듈을 따로 만듦 |
 | 컬러 사진 | 이 연산은 1채널만 받음. 채널을 나눠 세 번 실행한 뒤 합치는 방식은 시험하지 않았음 |
 

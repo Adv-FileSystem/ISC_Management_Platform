@@ -43,24 +43,22 @@
 Kafka로 보낼 클릭 이벤트 메시지 약 200 KB를 만듭니다(고정 시드). 메시지마다 `u32 길이 + u64 키` 머리말 뒤에 JSON 본문이 붙습니다.
 
 ```bash
-mkdir -p datasets/pscen
-python3 - <<'EOF'
-import json, random, struct
-rng = random.Random(8); out = bytearray()
-while len(out) < 200_000:
-    ev = {"ts": 1762300000 + len(out) // 50, "user": f"u{rng.randrange(5000):05d}",
-          "event": rng.choice(["view", "click", "cart", "buy"]), "item": rng.randrange(20000),
-          "price": round(rng.uniform(1, 300), 2), "session": f"s{rng.randrange(100000):06x}"}
-    body = json.dumps(ev, separators=(",", ":")).encode()
-    out += struct.pack("<IQ", len(body), rng.getrandbits(64)) + body   # 메시지 머리말(길이, 키) + JSON 본문
-open("datasets/pscen/kafka_events_200k.bin", "wb").write(out)
-print(len(out), "bytes")
-EOF
+python3 isc/operations/snappy_compress/examples/make_input.py
 ```
 
 ```text
 200074 bytes
 ```
+
+입력 파일은 [`examples/make_input.py`](examples/make_input.py)가 만듭니다. 스크립트는 두 부분으로 나뉩니다.
+
+| 부분 | 하는 일 | 사용자 |
+|---|---|---|
+| `make_sample()` | 예시 데이터를 만듦 | **바꾸는 곳** — 자기 데이터로 바꿈 |
+| `encode()` | 2절의 입력 형식(헤더·엔디안·타입)대로 바이트를 씀 | 고치지 않음 |
+
+- 실제 파일은 변환할 필요가 없습니다. 이 단계를 건너뛰고 그 파일을 바로 `--input`에 넘깁니다.
+- 저장 위치를 바꾸려면 `-o 경로`를 붙입니다.
 
 ### 4.2. 모듈 만들기
 
