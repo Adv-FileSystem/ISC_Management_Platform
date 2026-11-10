@@ -1,11 +1,11 @@
 operation:
   id: image_bicubic
   name: Bicubic downscale (8-bit gray, Vitis Codec)
-  version: "1.0"
+  version: "1.1"
   category: image
   description: >-
-    8비트 회색조 영상을 bicubic 보간으로 축소합니다. Vitis Codec L2 resize 커널(resizeTop)을 감싼
-    프로토타입 연산입니다. 확대는 지원하지 않습니다.
+    8비트 회색조 영상을 Vitis Codec L2 resizeTop 의 bicubic 보간으로 축소합니다. 줄인 화소마다
+    사용자 함수 isc_post 를 넣을 수 있습니다. 확대는 지원하지 않습니다.
 
 input:
   representation: binary
@@ -34,6 +34,14 @@ parameters:
     default: 256
     minimum: 1
     maximum: 8192
+
+user_logic:
+  template: logic.hpp.template
+  staged_header: isc_user_logic.hpp
+  functions:
+    - symbol: isc_post
+      signature: "uint8_t isc_post(uint8_t px)"
+      when: "출력 화소마다 1번, resizeTop 이 영상을 다 줄인 직후. 반환값이 그 자리의 출력 화소"
 
 baseline:
   # 공식 커널과 같은 소스를 CPU에서 C 시뮬레이션한 결과가 정답이다 (OpenCV INTER_CUBIC 과는
