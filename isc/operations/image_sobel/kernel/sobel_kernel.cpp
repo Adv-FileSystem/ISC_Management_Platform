@@ -1,7 +1,8 @@
 /**
  * Sobel 3x3 x/y gradients of 8-bit gray images, backed by Vitis Vision L1 (Vitis Libraries 2025.1).
- * Same body and configuration as the library's L1 example (vision/L1/examples/sobelfilter:
- * 3x3, XF_8UC1 in and out, NPPC1, 8-bit pointers, no URAM); only the maximum size is raised to 1080p.
+ * Configuration: 3x3, XF_8UC1 in and out, NPPC1, 8-bit pointers, no URAM, up to 1920x1080.
+ * Every gradient pixel (x and y) then goes through the user function isc_post
+ * (isc_user_logic.hpp, staged by ISC from the module's logic file or the operation's starter).
  */
 #include <stdint.h>
 
@@ -9,6 +10,7 @@
 #include "common/xf_common.hpp"
 #include "common/xf_utility.hpp"
 #include "imgproc/xf_sobel.hpp"
+#include "isc_user_logic.hpp"
 
 #define HEIGHT 1080
 #define WIDTH 1920
@@ -21,6 +23,22 @@
 #define XF_CV_DEPTH_IN 2
 #define XF_CV_DEPTH_OUT_GX 2
 #define XF_CV_DEPTH_OUT_GY 2
+
+namespace {
+
+template <int DEPTH_IN, int DEPTH_OUT>
+void userPost(xf::cv::Mat<OUT_TYPE, HEIGHT, WIDTH, NPPCX, DEPTH_IN>& in,
+              xf::cv::Mat<OUT_TYPE, HEIGHT, WIDTH, NPPCX, DEPTH_OUT>& out, int rows, int cols) {
+ISC_USER_POST:
+    for (int i = 0; i < rows * cols; i++) {
+#pragma HLS PIPELINE II = 1
+#pragma HLS LOOP_TRIPCOUNT min = 1 max = HEIGHT * WIDTH
+        uint8_t g = in.read(i);
+        out.write(i, isc_post(g));
+    }
+}
+
+}  // namespace
 
 extern "C" {
 
@@ -39,12 +57,16 @@ void isc_sobel3x3(ap_uint<PTR_WIDTH>* img_in, ap_uint<PTR_WIDTH>* grad_x, ap_uin
     xf::cv::Mat<IN_TYPE, HEIGHT, WIDTH, NPPCX, XF_CV_DEPTH_IN> in_mat(rows, cols);
     xf::cv::Mat<OUT_TYPE, HEIGHT, WIDTH, NPPCX, XF_CV_DEPTH_OUT_GX> gx_mat(rows, cols);
     xf::cv::Mat<OUT_TYPE, HEIGHT, WIDTH, NPPCX, XF_CV_DEPTH_OUT_GY> gy_mat(rows, cols);
+    xf::cv::Mat<OUT_TYPE, HEIGHT, WIDTH, NPPCX, XF_CV_DEPTH_OUT_GX> gx_out(rows, cols);
+    xf::cv::Mat<OUT_TYPE, HEIGHT, WIDTH, NPPCX, XF_CV_DEPTH_OUT_GY> gy_out(rows, cols);
 #pragma HLS DATAFLOW
     xf::cv::Array2xfMat<PTR_WIDTH, IN_TYPE, HEIGHT, WIDTH, NPPCX, XF_CV_DEPTH_IN>(img_in, in_mat);
     xf::cv::Sobel<XF_BORDER_CONSTANT, FILTER_WIDTH, IN_TYPE, OUT_TYPE, HEIGHT, WIDTH, NPPCX, XF_USE_URAM,
                   XF_CV_DEPTH_IN, XF_CV_DEPTH_OUT_GX, XF_CV_DEPTH_OUT_GY>(in_mat, gx_mat, gy_mat);
-    xf::cv::xfMat2Array<PTR_WIDTH, OUT_TYPE, HEIGHT, WIDTH, NPPCX, XF_CV_DEPTH_OUT_GX>(gx_mat, grad_x);
-    xf::cv::xfMat2Array<PTR_WIDTH, OUT_TYPE, HEIGHT, WIDTH, NPPCX, XF_CV_DEPTH_OUT_GY>(gy_mat, grad_y);
+    userPost(gx_mat, gx_out, rows, cols);
+    userPost(gy_mat, gy_out, rows, cols);
+    xf::cv::xfMat2Array<PTR_WIDTH, OUT_TYPE, HEIGHT, WIDTH, NPPCX, XF_CV_DEPTH_OUT_GX>(gx_out, grad_x);
+    xf::cv::xfMat2Array<PTR_WIDTH, OUT_TYPE, HEIGHT, WIDTH, NPPCX, XF_CV_DEPTH_OUT_GY>(gy_out, grad_y);
 }
 
 }  // extern "C"
