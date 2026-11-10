@@ -1,10 +1,11 @@
 operation:
   id: gemv_i32
   name: GEMV (int32, Vitis BLAS)
-  version: "1.0"
+  version: "1.1"
   category: linear_algebra
   description: >-
-    y_out = alpha * A x + beta * y (int32). Vitis BLAS L1 gemv 와 데이터 이동 함수를 감싼 연산입니다.
+    y_out = alpha * A x + beta * y (int32), Vitis BLAS L1 gemv. 행마다 결과를 정하는 사용자 함수
+    isc_decide 를 넣을 수 있습니다.
 
 input:
   representation: binary
@@ -14,11 +15,19 @@ input:
 
 output:
   representation: binary
-  # i32 y_out[m]
+  # i32 y_out[m] (행마다 isc_decide 가 돌려준 값)
   format: isc_i32_vector
   variable_size: true
 
 parameters: {}
+
+user_logic:
+  template: logic.hpp.template
+  staged_header: isc_user_logic.hpp
+  functions:
+    - symbol: isc_decide
+      signature: "int32_t isc_decide(int32_t score)"
+      when: "행(고객)마다 1번, gemv 가 점수를 계산한 직후. 반환값이 그 행의 출력"
 
 baseline:
   # 정수 연산이라 장치 출력과 바이트까지 같아야 한다 (int32 wrap 포함).

@@ -1,0 +1,17 @@
+// ISC 사용자 로직 — gemv_i32 (Vitis BLAS L1 xf::blas::gemv)
+//
+// 호출 시점: 고객(행)마다 1번. gemv 가 그 고객의 점수(alpha·A·x + beta·y)를 계산한 직후.
+// 입력: score = 그 고객의 점수 (int32)
+// 출력: 출력 파일에 저장할 값 (int32 하나, 입력 행 순서대로)
+//
+// 고치는 곳: return 줄만. 함수 이름과 인자·반환 타입은 바꾸지 마십시오 (인자 이름은 자유).
+// 예)  return score >= 25000 ? 2 : score >= 0 ? 1 : 0;   // 2 승인, 1 보류, 0 거절
+//      return score < 0 ? 0 : score;                    // 음수 점수는 0으로
+// 쓸 수 없는 것: 동적 할당, 파일 입출력, HLS INTERFACE 지시어. 다른 고객의 값은 볼 수 없습니다.
+#pragma once
+
+#include <stdint.h>
+
+inline int32_t isc_decide(int32_t score) {
+    return score;   // ISC-TODO: 규칙으로 바꾸십시오 (지금은 원래 연산과 같은 결과)
+}
