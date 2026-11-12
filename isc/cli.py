@@ -51,7 +51,9 @@ def build_parser() -> argparse.ArgumentParser:
         prog="isc", description="ISC module lifecycle platform")
     parser.add_argument("--workspace", help="workspace root (default: nearest parent with modules/)")
     parser.add_argument("--json", action="store_true", help="print machine-readable JSON")
-    commands = parser.add_subparsers(dest="command", required=True)
+    # Without a metavar argparse prints all 23 command names twice in one
+    # unbroken line at the top of `isc --help`; the list below says it better.
+    commands = parser.add_subparsers(dest="command", required=True, metavar="<command>")
 
     commands.add_parser("doctor", help="check the local environment")
     commands.add_parser("devices", help="list devices visible to each backend")
