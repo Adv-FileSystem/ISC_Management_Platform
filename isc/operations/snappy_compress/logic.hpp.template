@@ -1,0 +1,17 @@
+// ISC 사용자 로직 — snappy_compress (Vitis Data Compression L2 xilSnappyCompress)
+//
+// 호출 시점: 입력 바이트마다 1번. 압축하기 직전.
+// 입력: b = 원본 파일의 바이트 (0~255)
+// 출력: 압축할 바이트. 출력 파일을 풀면 이 값들이 나옵니다 (원본이 아니라 바뀐 값).
+//
+// 고치는 곳: return 줄만. 함수 이름과 인자·반환 타입은 바꾸지 마십시오 (인자 이름은 자유).
+// 예)  return (b >= '0' && b <= '9') ? '#' : b;      // 숫자를 # 으로 가리기 (개인정보 마스킹)
+//      return b == '\t' ? ' ' : b;                   // 탭을 공백으로
+// 쓸 수 없는 것: 동적 할당, 파일 입출력, HLS INTERFACE 지시어. 앞뒤 바이트의 값은 볼 수 없습니다.
+#pragma once
+
+#include <stdint.h>
+
+inline uint8_t isc_pre(uint8_t b) {
+    return b;   // ISC-TODO: 규칙으로 바꾸십시오 (지금은 원래 연산과 같은 결과)
+}

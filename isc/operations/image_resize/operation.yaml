@@ -1,0 +1,79 @@
+operation:
+  id: image_resize
+  name: Bilinear Resize (8-bit gray, Vitis Vision)
+  version: "1.1"
+  category: image
+  description: >-
+    8비트 회색조 영상의 크기를 Vitis Vision L1 resize 의 bilinear 보간으로 바꿉니다.
+    줄인 화소마다 사용자 함수 isc_post 를 넣을 수 있습니다.
+
+input:
+  representation: binary
+  # u32 rows, u32 cols, u8 pixels[rows][cols]  (리틀 엔디안 헤더, 행 우선)
+  format: isc_gray8
+  min_bytes: 9
+
+output:
+  representation: binary
+  # u32 out_rows, u32 out_cols, u8 pixels[out_rows][out_cols]
+  format: isc_gray8
+  variable_size: true
+
+parameters:
+  out_rows:
+    type: integer
+    scope: host
+    description: 출력 높이 (입력의 1/2 이상, 1080 이하)
+    default: 540
+    minimum: 1
+    maximum: 1080
+  out_cols:
+    type: integer
+    scope: host
+    description: 출력 너비 (입력의 1/2 이상, 1920 이하)
+    default: 960
+    minimum: 1
+    maximum: 1920
+
+user_logic:
+  template: logic.hpp.template
+  staged_header: isc_user_logic.hpp
+  functions:
+    - symbol: isc_post
+      signature: "uint8_t isc_post(uint8_t px)"
+      when: "출력 화소마다 1번, resize 가 크기를 바꾼 직후. 반환값이 그 자리의 출력 화소"
+
+baseline:
+  # 장치는 고정소수점 보간이라 OpenCV 와 화소값이 조금 다를 수 있다 (공식 테스트는 차이 5 이하 허용).
+  # 허용오차 비교는 검증 스크립트가 따로 한다.
+  equivalence: none
+  description: OpenCV cv2.resize(INTER_LINEAR)
+  requires: cv2
+
+runtime:
+  backend: xrt
+
+kernel:
+  name: isc_resize_bilinear
+  source: kernel/resize_kernel.cpp
+  include_dirs:
+    - ${VITIS_LIBRARIES}/vision/L1/include
+  arguments:
+    - {name: img_in, kind: buffer, direction: in}
+    - {name: img_out, kind: buffer, direction: out}
+    - {name: rows_in, kind: scalar, direction: in}
+    - {name: cols_in, kind: scalar, direction: in}
+    - {name: rows_out, kind: scalar, direction: in}
+    - {name: cols_out, kind: scalar, direction: in}
+  memory:
+    - {port: m_axi_gmem1, bank: 0}
+    - {port: m_axi_gmem2, bank: 1}
+
+build:
+  platform: xilinx_u50_gen3x16_xdma_5_202210_1
+  memory_type: HBM
+  targets: [hw_emu, hw]
+
+validation:
+  mode: cross_target
+  reference_target: hw_emu

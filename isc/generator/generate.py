@@ -160,3 +160,50 @@ def render_starter(template_text: str, hook_spec: dict[str, Any], profile_id: st
         "OUTPUT_DESC": str(hook_spec["output_description"]).format(**names),
         "EXAMPLES": examples,
     })
+
+
+_FIXED = re.compile(
+    r"^\s*(?P<ret>[A-Za-z_][\w:]*)\s+(?P<symbol>[A-Za-z_]\w*)\s*\((?P<params>[^)]*)\)\s*$"
+)
+
+
+def _parameter_types(params: str) -> list[str]:
+    """`const uint32_t src, uint32_t dst` -> ["uint32_t", "uint32_t"] (names and const dropped)."""
+    types = []
+    for item in params.split(","):
+        words = [word for word in item.split() if word != "const"]
+        if not words:
+            continue
+        types.append(words[0] if len(words) == 1 else " ".join(words[:-1]))
+    return types
+
+
+def check_fixed_signature(source: str, signature: str) -> None:
+    """Raise SignatureError unless `source` defines `signature` with the same types.
+
+    Used by built-in operations that open one function to the user. The types are fixed;
+    parameter names are the user's choice.
+    """
+    wanted = _FIXED.match(signature)
+    if wanted is None:
+        raise ValueError(f"malformed user_logic signature in operation.yaml: {signature!r}")
+    symbol = wanted.group("symbol")
+    ret = wanted.group("ret")
+    params = _parameter_types(wanted.group("params"))
+    code = strip_comments(source)
+    if not re.search(rf"\b{re.escape(symbol)}\s*\(", code):
+        raise SignatureError(f"source does not define `{symbol}`; declare it as `{signature}`")
+    found = re.search(
+        rf"(?:\b(?:inline|static)\s+)*(?P<ret>[A-Za-z_][\w:]*)\s+{re.escape(symbol)}"
+        rf"\s*\((?P<params>[^)]*)\)\s*\{{",
+        code,
+    )
+    if found is None:
+        raise SignatureError(
+            f"`{symbol}` is not defined in a supported form; use `{signature}` with a body"
+        )
+    if found.group("ret") != ret or _parameter_types(found.group("params")) != params:
+        got = f"{found.group('ret')} {symbol}({found.group('params').strip()})"
+        raise SignatureError(
+            f"`{symbol}` must keep the types `{signature}`; found `{' '.join(got.split())}`"
+        )

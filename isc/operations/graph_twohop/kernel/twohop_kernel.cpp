@@ -2,9 +2,16 @@
  * Two-hop path count backed by Vitis Graph L2 (xf::graph::twoHop, Vitis Libraries 2025.1).
  * Same body and interface pragmas as the official test kernel (graph/L2/tests/twoHop/kernel/
  * twoHop_kernel.cpp); only the kernel name differs. pair[i] = (src << 32) | dst, 0-based.
+ *
+ * After twoHop, the user's isc_score(src, dst, count) runs once per pair (isc_user_logic.hpp,
+ * staged next to this file at build time). The starter returns count, so a module without a
+ * logic file gives the official kernel's result.
  */
 #include "xf_graph_L2.hpp"
 #include <ap_int.h>
+#include <stdint.h>
+
+#include "isc_user_logic.hpp"
 
 extern "C" void isc_twohop(unsigned num_pairs, ap_uint<64>* pair, unsigned* offset_one, unsigned* index_one,
                            unsigned* offset_two, unsigned* index_two, unsigned* count) {
@@ -23,4 +30,12 @@ extern "C" void isc_twohop(unsigned num_pairs, ap_uint<64>* pair, unsigned* offs
 #pragma HLS INTERFACE s_axilite port = count bundle = control
 #pragma HLS INTERFACE s_axilite port = return bundle = control
     xf::graph::twoHop(num_pairs, pair, offset_one, index_one, offset_two, index_two, count);
+
+ISC_USER_SCORE:
+    for (unsigned i = 0; i < num_pairs; i++) {
+        ap_uint<64> p = pair[i];
+        uint32_t src = p.range(63, 32);
+        uint32_t dst = p.range(31, 0);
+        count[i] = isc_score(src, dst, count[i]);
+    }
 }

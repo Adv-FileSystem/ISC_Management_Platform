@@ -1,204 +1,201 @@
-# `mc_european` — 리스크팀의 유럽형 옵션 가격 야간 재계산 (연산 선택형)
+# `mc_european` — 리스크팀의 유럽형 옵션 가격 재계산과 변동성 스트레스 테스트 (연산 선택형 + 사용자 로직)
 
-| 개발 방식 | 사용자가 작성하는 것 | 커널 | 파라미터 | 플랫폼 자체 테스트 | 공식 라이브러리 테스트 |
-|---|---|---|---|---|---|
-| 연산 선택형 | 없음 (`isc new` 한 줄) | Vitis Quantitative Finance L2 `xf::fintech::MCEuropeanEngine` (`kernel/mc_european_kernel.cpp`) | `samples`, `time_steps` | ✅ 통과 (2026-11-05) | ✅ 통과 (2026-11-05) |
+| 개발 방식 | 사용하는 라이브러리 함수 | 검증 상태 |
+|---|---|---|
+| 연산 선택형 + 사용자 로직 `isc_volatility` | Vitis Quantitative Finance L2 `xf::fintech::MCEuropeanEngine` (`kernel/mc_european_kernel.cpp`). 엔진 호출 전 옵션마다 사용자 함수를 실행 | 플랫폼 자체 테스트 ✅ (1.0 사용자 로직 없음: hw_emu·hw / 1.1 사용자 로직: hw_emu, hw 미실행) · 공식 라이브러리 테스트 ✅ (검증 장치 AMD Alveo U50 · [검증 기록](../../../verification/u50_vitis_libraries/results/mc_european.md)) |
 
-> 이 연산은 시나리오 검증용 **프로토타입**입니다. 엔진 호출과 설정(`float`, `UN=2`, 허용오차 0.02)은 공식 L2 테스트 커널(`mc_euro_k.cpp`)과 같고, 메모리에서 읽은 옵션 묶음을 차례로 계산하는 반복만 덧붙였습니다. 옵션마다 시드를 고정해 실행할 때마다 같은 값이 나옵니다.
+## 1. 연산 예시
 
-## 1. 시나리오
+금융사 리스크팀의 가격 계산 담당 개발자가 매일 밤 보유 중인 유럽형 옵션 가격을 Monte Carlo 시뮬레이션으로 다시 계산합니다. 시장이 흔들릴 때를 대비해 "변동성이 20% 오르면 가격이 얼마가 되는가"를 보는 스트레스 테스트도 함께 합니다.
 
-| 항목 | 내용 |
-|---|---|
-| 사용자 | 금융사 리스크팀의 가격 계산 담당 개발자 |
-| 상황 | 리스크팀이 매일 밤 보유 유럽형 옵션 가격을 Monte Carlo로 재계산한다 |
-| 가속하는 단계 | 경로 시뮬레이션과 가격 계산 |
-| 입력 → 출력 | 옵션 조건(기초가, 행사가, 변동성, 만기) → 가격 |
-| 완료 기준 | 공식 골든 가격과 상대오차 2% 안 |
+Monte Carlo 가격 계산은 Vitis Quantitative Finance 라이브러리가 하고, 스트레스 시나리오(엔진에 넘길 변동성)는 사용자가 C++ 함수 하나로 작성합니다. 두 단계 모두 FPGA에서 실행됩니다.
 
-**판정 방법.** 공식 테스트(`host/test.cpp`)는 오차를 `|가격 − golden| / 기초가 S`로 정의하고 1% 이하를 통과로 봅니다. 공식 golden은 Black-Scholes 해석해 값입니다(예: `S=100, K=75, σ=0.11, r=0.01, T=1` 콜의 golden 25.7561 = 해석해). 시나리오 입력에는 공식 golden이 따로 없으므로, 같은 해석해(`baseline.py`)를 정답으로 두고 공식 테스트와 같은 식으로 판정했습니다. 이 식으로 1% 이하면 시나리오의 2% 기준도 만족합니다.
+### 1.1. 리스크 배치 코드 안에서 직접 계산하는 기존 방식
 
-## 2. 연산 요약
+```python
+import numpy as np
 
-| 항목 | 내용 |
-|---|---|
-| 입력 | 리틀 엔디안 이진 파일: `u32 count, u32 0` + 옵션마다 `f32` 8개 (`S, K, sigma, q, r, T, type, 0`). `type` 0 = 콜, 1 = 풋 |
-| 출력 | `f32 price[count]` — 입력 순서대로 옵션 가격 |
-| 파라미터 | `samples` 옵션당 경로 수 (기본 4096, 1024~1048576. 공식 테스트는 40000), `time_steps` 경로당 시간 단계 (기본 1, 1~100) |
-| 한계 | `count` 1~65536. `S, K, sigma, T`는 0보다 커야 함 |
-| CPU 참조 | `baseline.py` (Black-Scholes 해석해, `math.erf`). Monte Carlo는 근사값이므로 바이트 일치가 아니라 오차로 판정 |
-| 메모리 | 포트 2개 (`operation.yaml`) |
+def mc_price(S, K, sigma, q, r, T, put, samples=4096):
+    z = np.random.default_rng(1).standard_normal(samples)
+    ST = S * np.exp((r - q - 0.5 * sigma**2) * T + sigma * np.sqrt(T) * z)
+    payoff = np.maximum(K - ST, 0) if put else np.maximum(ST - K, 0)
+    return np.exp(-r * T) * payoff.mean()
 
-## 3. 준비
+stressed = [(S, K, sigma * 1.2, q, r, T, put) for S, K, sigma, q, r, T, put in book]
+prices = [mc_price(*opt) for opt in stressed]
+```
 
-- 공통 설치와 환경 확인: [README 1절](../../../README.md#1-설치-및-환경-구성)
-- 빌드에 **`VITIS_LIBRARIES`** 가 필요합니다: `export VITIS_LIBRARIES=[Vitis Libraries 2025.1 경로]`
-- 모든 명령은 **저장소 루트**에서 실행합니다. 실습 파일은 `datasets/pscen/`(git에 올라가지 않음)에 만듭니다.
-
-## 4. 개발 절차
-
-### 4.1. 입력 만들기
-
-보유 옵션 8건(콜 4, 풋 4)을 만듭니다. 6건은 공식 테스트의 조건표에 있는 조합이고, 2건(`T=0.5`, `T=2`)은 그 밖의 조합입니다.
+### 1.2. ISC 전주기 시스템 기반의 방식
 
 ```bash
-mkdir -p datasets/pscen
-python3 - <<'EOF'
+python3 isc/operations/mc_european/examples/make_input.py --csv book.csv -o book.bin    # 보유 옵션 CSV → 연산 입력 형식
+isc new option_book --operation mc_european --set samples=4096 --logic                   # 처음 한 번: 모듈과 사용자 로직 파일(logic.hpp) 만들기
+# modules/option_book/logic.hpp 의 return 줄을 스트레스 시나리오로 수정
+isc check option_book                                                                    # 사용자 로직 검사
+isc run option_book --input book.bin --output prices.bin --target hw                     # FPGA가 옵션마다 Monte Carlo 가격 계산
+```
+
+- 입력: `u32 count, u32 0` + 옵션마다 `f32` 8개(`S, K, sigma, q, r, T, type, 0`, little-endian). `type` 0 = 콜, 1 = 풋. 2.1의 스크립트가 CSV에서 만들어 줍니다. 옵션 1~65,536건, `S, K, sigma, T`는 0보다 커야 함
+- 출력: `f32 price[count]` — 입력 순서대로 옵션 가격. 엔진은 사용자 함수 `isc_volatility`가 돌려준 변동성으로 계산합니다
+- 사용자 로직 없이(`--logic` 생략) 만들면 입력의 변동성 그대로 계산합니다
+- Monte Carlo는 근사값이라 1.1과 바이트까지 같지는 않습니다. 정답 기준은 Black-Scholes 해석해이고, 판정식(`|가격 − 정답| / 기초가 S ≤ 1%`)으로 확인합니다
+- 만기 수익 식(payoff)은 엔진 내부에 콜·풋으로 고정되어 있어 사용자 함수로 바꿀 수 없습니다
+- 실제로 따라 할 절차는 2절(개발 절차)과 3절(실행 방법)에 있습니다.
+
+## 2. 개발 절차
+
+모든 명령은 저장소 루트에서 실행합니다.
+
+### 2.1. 입력 준비
+
+**사용자가 할 일**: 보유 옵션 목록을 이 연산의 입력 형식으로 변환합니다. CSV가 있으면 `--csv` 옵션으로 바로 변환되고(코드 수정 불필요), 다른 형식이면 `make_sample()`을 고칩니다.
+
+```bash
+# 내 보유 옵션 CSV (머리글 S,K,sigma,q,r,T,type, 한 줄에 옵션 1건) → 입력 형식
+python3 isc/operations/mc_european/examples/make_input.py --csv [보유 옵션 CSV] -o datasets/mc_european/[이름].bin
+
+# 또는 예시(옵션 8건: 콜 4·풋 4)로 먼저 해 보기
+python3 isc/operations/mc_european/examples/make_input.py                # → datasets/mc_european/option_book_8.bin
+```
+
+[`examples/make_input.py`](examples/make_input.py) 전체 코드입니다(주석 제외). `make_sample()`(예시 옵션)·`read_csv()`(CSV 읽기)만 고치고, `encode()`(입력 형식)와 `main()`은 그대로 둡니다. 옵션 하나는 `(S, K, sigma, q, r, T, type)` 튜플입니다.
+
+```python
+import argparse
+import csv
 import struct
-# S, K, sigma, q, r, T, type(0 콜, 1 풋)
-book = [(100, 75, 0.11, 0.00, 0.01, 1, 0), (100, 100, 0.50, 0.00, 0.05, 1, 0), (100, 125, 1.20, 0.05, 0.15, 1, 0),
-        (100, 100, 0.30, 0.02, 0.03, 0.5, 0), (100, 75, 0.11, 0.00, 0.01, 1, 1), (100, 100, 0.50, 0.00, 0.05, 1, 1),
-        (100, 125, 1.20, 0.05, 0.15, 1, 1), (100, 110, 0.25, 0.01, 0.04, 2, 1)]
-data = struct.pack("<II", len(book), 0) + b"".join(struct.pack("<8f", *o, 0.0) for o in book)
-open("datasets/pscen/option_book_8.bin", "wb").write(data)
-print(len(book), "options,", len(data), "bytes")
-EOF
+from pathlib import Path
+
+DEFAULT_OUTPUT = "datasets/mc_european/option_book_8.bin"
+FIELDS = ("S", "K", "sigma", "q", "r", "T", "type")
+
+
+def make_sample() -> list:
+    return [(100, 75, 0.11, 0.00, 0.01, 1, 0), (100, 100, 0.50, 0.00, 0.05, 1, 0), (100, 125, 1.20, 0.05, 0.15, 1, 0),
+            (100, 100, 0.30, 0.02, 0.03, 0.5, 0), (100, 75, 0.11, 0.00, 0.01, 1, 1), (100, 100, 0.50, 0.00, 0.05, 1, 1),
+            (100, 125, 1.20, 0.05, 0.15, 1, 1), (100, 110, 0.25, 0.01, 0.04, 2, 1)]
+
+
+def read_csv(path: str) -> list:
+    with open(path, newline="", encoding="utf-8") as f:
+        return [tuple(float(row[k]) for k in FIELDS) for row in csv.DictReader(f)]
+
+
+def encode(book: list) -> bytes:
+    return struct.pack("<II", len(book), 0) + b"".join(struct.pack("<8f", *o, 0.0) for o in book)
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description="mc_european 입력 파일 만들기")
+    parser.add_argument("-o", "--output", default=DEFAULT_OUTPUT)
+    parser.add_argument("--csv", help="보유 옵션 CSV (머리글: S,K,sigma,q,r,T,type)")
+    args = parser.parse_args()
+    book = read_csv(args.csv) if args.csv else make_sample()
+    data = encode(book)
+    out = Path(args.output)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_bytes(data)
+    print(len(book), "options,", len(data), "bytes")
+
+
+if __name__ == "__main__":
+    main()
 ```
 
-```text
-8 options, 264 bytes
+수정 예 — 시스템에서 내려받은 CSV의 열 이름이 다를 때 (위 전체 코드에서 `read_csv()`만 이것으로 바꿈):
+
+```python
+def read_csv(path: str) -> list:
+    with open(path, newline="", encoding="utf-8") as f:
+        return [(float(row["spot"]), float(row["strike"]), float(row["vol"]), float(row["div"]),
+                 float(row["rate"]), float(row["maturity"]), 1.0 if row["cp"] == "P" else 0.0)
+                for row in csv.DictReader(f)]
 ```
 
-### 4.2. 모듈 만들기
+### 2.2. 모듈 만들기
+
+**사용자가 할 일**: 모듈 이름과 경로 수(`samples`, 기본 4096, 1024~1048576), 경로당 시간 단계(`time_steps`, 기본 1, 1~100)를 정합니다. 스트레스 시나리오를 넣으려면 `--logic`을 붙입니다.
 
 ```bash
-isc describe mc_european                    # 입력·출력 형식 확인 (선택)
-isc new option_book --operation mc_european
+isc new option_book --operation mc_european --set samples=4096 --set time_steps=1 --logic
 ```
 
-생성되는 `modules/option_book/module.yaml`:
+- `modules/option_book/` 폴더에 `module.yaml`과 사용자 로직 파일 `logic.hpp`가 만들어집니다.
+- 로직 파일을 먼저 작성한 뒤 모듈을 만들어도 됩니다. `isc template mc_european -o stress.hpp`로 시작 파일을 받아 2.3처럼 고친 다음, `--logic stress.hpp`로 모듈을 만듭니다.
+- 평상시 가격만 필요하면 `--logic`을 빼고 만들고, 2.3은 건너뜁니다.
 
-```yaml
-module:
-  id: option_book
-  name: option_book
-  version: 0.1.0
-operation:
-  id: mc_european
-  version: '1.0'
-parameters:
-  samples: 4096
-  time_steps: 1
+- 두 값은 나중에 `modules/option_book/module.yaml`로도 바꿀 수 있고, 바꿔도 다시 빌드하지 않습니다.
+- 경로 수를 늘리면 오차가 줄고 실행 시간이 늘어납니다.
+
+### 2.3. 로직 작성
+
+**사용자가 할 일**: `modules/option_book/logic.hpp`를 열어 함수 `isc_volatility`의 `return` 줄을 스트레스 시나리오로 바꾸고, 그 줄의 `ISC-TODO` 주석을 지웁니다.
+
+아래는 "모든 옵션의 변동성이 20% 오름" 시나리오로 고친 파일 전체입니다.
+
+```cpp
+#pragma once
+
+inline float isc_volatility(float sigma) {
+    return sigma * 1.2f;
+}
 ```
 
-`samples`·`time_steps`는 호스트에서 넘기는 값이라 바꿔도 다시 빌드하지 않습니다. 경로 수를 늘리면 오차가 줄고 실행 시간이 늘어납니다.
+- **호출 시점**: 옵션마다 한 번, 라이브러리 엔진 `xf::fintech::MCEuropeanEngine`에 넘기기 직전에 호출됩니다. 함수가 돌려준 값을 엔진이 변동성으로 씁니다.
+- **입력값**: `sigma`는 입력 파일에 적힌 그 옵션의 변동성(예: 0.2 = 20%)입니다.
+- **바꾸면 안 되는 것**: 함수 이름(`isc_volatility`), 인자 타입과 반환 타입(`float`). 인자 이름은 바꿔도 됩니다.
+- **쓸 수 있는 것**: 비교·사칙 연산, 상수(`1.2f`처럼 `f`를 붙인 실수), 조건식. 보조 함수나 상수를 더 정의해도 됩니다. 예:
+  - `return sigma < 0.3f ? 0.3f : sigma;` — 변동성 하한 30%
+  - `return sigma + 0.05f;` — 변동성 5%p 상승
+- **쓸 수 없는 것**: 동적 메모리 할당(`new`, `malloc`), 파일·네트워크 입출력(`fopen`, `open`, `socket`), `#pragma HLS INTERFACE`, 다른 옵션의 값 참조.
+- 돌려주는 값은 0보다 커야 합니다(엔진은 양수 변동성만 받습니다).
+- 파일을 고치지 않고 두면(`return sigma;`) 원래 연산과 같은 결과, 즉 입력의 변동성 그대로 계산합니다.
 
-### 4.3. 검사
+### 2.4. 검사
+
+**사용자가 할 일**: 빌드하기 전에 모듈 설정과 로직 파일을 검사합니다. 문제가 없으면 `PASS`가 표시됩니다.
 
 ```bash
 isc check option_book
 ```
 
-### 4.4. 에뮬레이션 실행 (hw_emu)
+- 함수 이름·인자·반환 타입이 다르거나 쓸 수 없는 문법이 있으면 `problem`이 표시되고, 고칠 때까지 빌드와 실행이 진행되지 않습니다.
+- `ISC-TODO` 주석이 남아 있으면 `warning`이 표시됩니다. 빌드는 진행됩니다.
+
+## 3. 실행 방법
+
+**사용자가 할 일**:
+
+- `--input`에 2.1의 파일, `--output`에 결과를 저장할 경로를 지정합니다. 결과 확인 명령에도 같은 입력 파일을 `--input`으로 지정합니다(예시 파일이면 생략).
+- 결과 확인 스크립트 [`examples/check_output.py`](examples/check_output.py)의 `[바꾸는 곳]`에 있는 `volatility()`를 2.3과 같은 규칙으로 맞춥니다. 2.3의 예시 규칙을 그대로 썼다면 고칠 것이 없습니다.
+- 2.2에서 `--logic` 없이 모듈을 만들었다면, 결과 확인 명령에 `--original`을 붙입니다.
 
 ```bash
-isc run option_book --input datasets/pscen/option_book_8.bin --output datasets/pscen/option_book.emu.bin
-```
+# 에뮬레이션 실행 (카드 없이, 처음 한 번 수 분 빌드)
+isc run option_book --input datasets/mc_european/option_book_8.bin --output datasets/mc_european/option_book.emu.bin
 
-### 4.5. 결과 확인
+# 결과 확인: 같은 규칙으로 바꾼 변동성의 Black-Scholes 해석해와 비교, 판정식 max |d|/S ≤ 1%면 PASS
+python3 isc/operations/mc_european/examples/check_output.py datasets/mc_european/option_book.emu.bin --input datasets/mc_european/option_book_8.bin
 
-옵션마다 FPGA 가격을 Black-Scholes 해석해와 비교합니다. 공식 테스트의 판정식(`|d|/S`)과 가격 대비 오차(`|d|/BS`)를 함께 출력합니다.
+# FPGA 카드 실행 (hw) (처음 한 번 hw 빌드 약 67분) — 카드 출력이 에뮬레이션 출력과 같은지 플랫폼이 자동 비교
+isc run option_book --input datasets/mc_european/option_book_8.bin --output datasets/mc_european/option_book.hw.bin --target hw
+python3 isc/operations/mc_european/examples/check_output.py datasets/mc_european/option_book.hw.bin --input datasets/mc_european/option_book_8.bin
 
-```bash
-python3 - datasets/pscen/option_book.emu.bin <<'EOF'
-import sys, struct
-sys.path.insert(0, "isc/operations/mc_european")
-from baseline import compute
-from mc_format import options
-inp = open("datasets/pscen/option_book_8.bin", "rb").read()
-got = open(sys.argv[1], "rb").read()
-opts = options(inp)
-fpga = struct.unpack(f"<{len(opts)}f", got)
-bs = struct.unpack(f"<{len(opts)}f", compute(inp, {}))
-worst = 0.0
-for (s, k, sig, q, r, t, kind, _), g, e in zip(opts, fpga, bs):
-    err_s = abs(g - e) / s                      # 공식 테스트 판정식: |가격 - 정답| / 기초가
-    worst = max(worst, err_s)
-    print(f"{'put ' if kind else 'call'} K={k:4.0f} sigma={sig:.2f} T={t:g}: fpga={g:8.4f} BS={e:8.4f} "
-          f"|d|/S={err_s * 100:.3f}%  |d|/BS={abs(g - e) / e * 100:.3f}%")
-print(f"max |d|/S = {worst * 100:.3f}%  ->", "PASS" if worst <= 0.01 else "FAIL", "(official rule: <= 1%)")
-EOF
-```
-
-U50(hw) 출력에 적용한 결과 (hw_emu 출력과 바이트까지 같으므로 값도 같습니다):
-
-```text
-call K=  75 sigma=0.11 T=1: fpga= 25.6835 BS= 25.7561 |d|/S=0.073%  |d|/BS=0.282%
-call K= 100 sigma=0.50 T=1: fpga= 21.5879 BS= 21.7926 |d|/S=0.205%  |d|/BS=0.939%
-call K= 125 sigma=1.20 T=1: fpga= 40.0326 BS= 39.7416 |d|/S=0.291%  |d|/BS=0.732%
-call K= 100 sigma=0.30 T=0.5: fpga=  8.6017 BS=  8.5913 |d|/S=0.010%  |d|/BS=0.120%
-put  K=  75 sigma=0.11 T=1: fpga=  0.0092 BS=  0.0098 |d|/S=0.001%  |d|/BS=6.616%
-put  K= 100 sigma=0.50 T=1: fpga= 16.9149 BS= 16.9155 |d|/S=0.001%  |d|/BS=0.004%
-put  K= 125 sigma=1.20 T=1: fpga= 51.7792 BS= 52.2071 |d|/S=0.428%  |d|/BS=0.820%
-put  K= 110 sigma=0.25 T=2: fpga= 16.0924 BS= 15.8314 |d|/S=0.261%  |d|/BS=1.649%
-max |d|/S = 0.428%  -> PASS (official rule: <= 1%)
-```
-
-가격이 아주 작은 옵션(위의 깊은 외가격 풋, 가격 약 0.01)은 절대 오차가 0.0006이어도 가격 대비 오차가 6.6%로 커집니다. 가격 대비 오차가 필요하면 `samples`를 늘려 다시 실행하십시오 (이 문서에서는 시험하지 않았습니다).
-
-### 4.6. U50 실행 (hw)
-
-```bash
-isc run option_book --input datasets/pscen/option_book_8.bin --output datasets/pscen/option_book.hw.bin --target hw
-```
-
-플랫폼이 hw_emu 기준 출력을 먼저 만들고 → hw 빌드 → 카드 실행 → 두 출력을 바이트 비교합니다. 이 서버에서 처음 실행(빌드 포함)은 약 67분 걸렸습니다. 4.5의 명령에서 파일 이름을 `option_book.hw.bin`으로 바꿔 확인합니다.
-
-실제 출력 (발췌):
-
-```text
-  input      : 264 bytes  .../datasets/pscen/option_book_8.bin
-  output     : 32 bytes  .../option_book_option_book_8.hw.bin
-  kernel_ms  : 0.442
-  validation : PASS  (cross_target) matches reference target output (32 bytes)
-```
-
-### 4.7. 기록 확인
-
-```bash
+# 실행 기록
 isc records --module option_book
 isc show [실행 ID]
 ```
 
-## 5. 내 데이터에 적용하기
+- 가격이 아주 작은 옵션(예시의 깊은 외가격 풋, 가격 약 0.01)은 절대 오차가 작아도 가격 대비 오차(`|d|/BS`)가 크게 나옵니다(예시에서 6.6%). 가격 대비 오차가 필요하면 `samples`를 늘려 다시 실행합니다(이 방법은 시험하지 않았습니다).
+결과 확인 스크립트는 입력의 변동성에 아래 `volatility()` 함수를 적용한 뒤 Black-Scholes 해석해를 계산해 FPGA 가격과 비교합니다. `volatility()`는 2.3의 규칙을 Python으로 옮긴 것이므로, 2.3의 규칙을 바꾸면 이 함수도 함께 바꿉니다.
 
-| 바꿀 것 | 방법 |
-|---|---|
-| 보유 옵션 | 옵션마다 `S, K, sigma, q, r, T, type, 0`을 `f32`로 써서 4.1 형식으로. 최대 65,536건 |
-| 정밀도 | `modules/option_book/module.yaml`의 `samples`를 늘림 (공식 테스트는 40000) |
-| 결과 사용 | 출력 순서는 입력 순서와 같음 |
+```python
+def volatility(sigma):
+    return sigma * np.float32(1.2)
+```
 
-## 6. 문제 해결
-
-| 증상 | 원인 | 해결 |
-|---|---|---|
-| `mc_european count must be 1..65536, the header says ...` | 헤더의 개수가 범위 밖 | 나눠서 실행 |
-| `mc_european header says N options = ... bytes; received ...` | 헤더 개수와 파일 길이가 다름 | `8 + 32·count` 바이트로 맞춤 |
-| `mc_european option i: S, K, sigma, T must be > 0 and type 0 or 1` | 잘못된 옵션 값 | 값과 `type`(0 콜, 1 풋) 확인 |
-| 가격이 해석해와 조금씩 다름 | Monte Carlo 근사 | 정상. 4.5의 오차로 판정 |
-| hw 빌드가 메모리 부족으로 중단 | 다른 hw 빌드와 동시에 실행 | 한 번에 하나씩 빌드 (이 서버에서 동시 빌드 중 한 번 발생) |
-
-## 7. 검증 기록
-
-### 7.1. 플랫폼 자체 테스트
-
-| 항목 | 내용 |
-|---|---|
-| 확인일 | 2026-11-05 |
-| 환경 | Ubuntu 22.04.5 LTS (커널 6.8.0-138), Vitis 2025.1, XRT 2.19.194, Vitis Libraries `v2025.1_update2` (커밋 b2c657d), AMD Alveo U50 (`xilinx_u50_gen3x16_xdma_base_5`), 저장소 기준 커밋 `8742866` + 이 연산 폴더(커밋 전) |
-| 입력 | 4.1의 `option_book_8.bin` (264바이트, sha256 `9e513277…`), `samples=4096`, `time_steps=1` |
-| hw_emu | 통과 — 실행 `20261105T205122-93697b` |
-| hw (U50) | **통과** — 실행 `20261105T205122-fc53c6`. hw 출력 = hw_emu 출력(플랫폼 자동 대조). Black-Scholes 해석해 대비 공식 판정식(`\|d\|/S`) 최대 0.428% (기준 1%). 가격 대비 오차는 최대 6.6%(깊은 외가격 풋 1건), 나머지 7건은 1.65% 이하 |
-| 참고 | 첫 hw 빌드는 다른 빌드와 동시에 돌다 메모리 부족으로 실패했고, 단독으로 다시 빌드해 통과 |
-| 확인하지 않은 것 | 성능(가속 효과). `samples`를 바꾼 실행. 이 문서의 입력 한 가지로만 확인 |
-
-### 7.2. 공식 라이브러리 테스트
-
-Vitis Libraries 공식 테스트를 고치지 않고 U50에서 빌드·실행했습니다. **입력은 공식 테스트에 들어 있는 조건표**이며 위 시나리오 데이터가 아닙니다.
-
-| 항목 | 내용 |
-|---|---|
-| 공식 테스트 | `quantitative_finance/L2/tests/MCEuropeanEngine` (Vitis Libraries `v2025.1_update2`) |
-| 빌드 | `make all TARGET=hw PLATFORM=xilinx_u50_gen3x16_xdma_5_202210_1`, 이 서버의 메모리 제한 때문에 `VPP_LDFLAGS="--vivado.synth.jobs 4 --vivado.impl.jobs 4"`를 붙임 (2026-11-04, 약 46분) |
-| 실행 | `make run TARGET=hw PLATFORM=xilinx_u50_gen3x16_xdma_5_202210_1` (공식 `host/test.cpp`의 조건표와 golden) |
-| 결과 | **통과** — 2026-11-05, golden 비교(`\|d\|/S ≤ 0.01`) `Info: Test passed` |
+- **규칙을 바꿀 때**: `logic.hpp`를 고치고 `isc run`을 다시 실행하면, 바뀐 로직으로 자동으로 다시 빌드합니다. 에뮬레이션으로 먼저 확인한 다음 FPGA 카드에서 실행합니다.
+- **성능 측정**: 사용자 로직이 들어간 모듈은 `isc bench`에서 CPU 기준선과 비교하지 않습니다. 가속 효과를 측정하려면 `--logic` 없이 만든 모듈을 씁니다.
+- **다른 옵션 목록으로 실행할 때**: 2.1처럼 변환한 뒤 `--input`·`--output`만 바꿔 실행합니다. 로직이 같으면 다시 빌드하지 않습니다.
+- hw 빌드는 다른 hw 빌드와 동시에 돌리면 메모리가 부족해 멈출 수 있으므로, 한 번에 하나씩 빌드합니다.
+- 터미널 출력을 파일로도 남기려면 명령 뒤에 `2>&1 | tee [로그 파일]`을 붙입니다.

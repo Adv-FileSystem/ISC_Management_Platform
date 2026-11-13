@@ -1,0 +1,17 @@
+// ISC 사용자 로직 — image_gaussian (Vitis Vision L1 xf::cv::GaussianBlur)
+//
+// 호출 시점: 출력 화소마다 1번. GaussianBlur 가 흐리게 한 직후.
+// 입력: px = 화소 값 (0~255)
+// 출력: 그 자리에 저장할 화소 값 (0~255)
+//
+// 고치는 곳: return 줄만. 함수 이름과 인자·반환 타입은 바꾸지 마십시오 (인자 이름은 자유).
+// 예)  return px >= 128 ? 255 : 0;          // 글자/바탕 이진화 (OCR 전처리)
+//      return px < 40 ? 0 : px;              // 아주 어두운 잡음은 0으로
+// 쓸 수 없는 것: 동적 할당, 파일 입출력, HLS INTERFACE 지시어. 주변 화소의 값은 볼 수 없습니다.
+#pragma once
+
+#include <stdint.h>
+
+inline uint8_t isc_post(uint8_t px) {
+    return px;   // ISC-TODO: 규칙으로 바꾸십시오 (지금은 원래 연산과 같은 결과)
+}

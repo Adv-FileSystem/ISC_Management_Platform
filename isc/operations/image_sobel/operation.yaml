@@ -1,0 +1,64 @@
+operation:
+  id: image_sobel
+  name: Sobel 3x3 gradients (8-bit gray, Vitis Vision)
+  version: "1.1"
+  category: image
+  description: >-
+    8비트 회색조 영상의 x·y 방향 Sobel 3x3 기울기(8비트 포화, 가장자리 0 채움)를 Vitis Vision L1 Sobel 로
+    구합니다. 기울기 화소마다 사용자 함수 isc_post 를 넣을 수 있습니다.
+
+input:
+  representation: binary
+  # u32 rows, u32 cols, u8 pixels[rows][cols]  (리틀 엔디안 헤더, 행 우선)
+  format: isc_gray8
+  min_bytes: 9
+
+output:
+  representation: binary
+  # u32 rows, u32 cols, u8 grad_x[rows][cols], u8 grad_y[rows][cols]
+  format: isc_gray8_pair
+  variable_size: true
+
+parameters: {}
+
+user_logic:
+  template: logic.hpp.template
+  staged_header: isc_user_logic.hpp
+  functions:
+    - symbol: isc_post
+      signature: "uint8_t isc_post(uint8_t g)"
+      when: "기울기 화소마다 1번(x·y 두 영상 모두), Sobel 이 기울기를 계산한 직후. 반환값이 그 자리의 출력"
+
+baseline:
+  # 공식 testbench 가 OpenCV 와 차이 0 을 요구한다(analyzeDiff(diff, 0)). 그래서 완전 일치 대조에 쓴다.
+  equivalence: exact
+  description: OpenCV cv2.Sobel(CV_8U, 3x3, BORDER_CONSTANT) x 와 y
+  requires: cv2
+
+runtime:
+  backend: xrt
+
+kernel:
+  name: isc_sobel3x3
+  source: kernel/sobel_kernel.cpp
+  include_dirs:
+    - ${VITIS_LIBRARIES}/vision/L1/include
+  arguments:
+    - {name: img_in, kind: buffer, direction: in}
+    - {name: grad_x, kind: buffer, direction: out}
+    - {name: grad_y, kind: buffer, direction: out}
+    - {name: rows, kind: scalar, direction: in}
+    - {name: cols, kind: scalar, direction: in}
+  memory:
+    - {port: m_axi_gmem1, bank: 0}
+    - {port: m_axi_gmem2, bank: 1}
+    - {port: m_axi_gmem3, bank: 2}
+
+build:
+  platform: xilinx_u50_gen3x16_xdma_5_202210_1
+  memory_type: HBM
+  targets: [hw_emu, hw]
+
+validation:
+  mode: cross_target
+  reference_target: hw_emu

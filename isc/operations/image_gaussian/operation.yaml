@@ -1,0 +1,73 @@
+operation:
+  id: image_gaussian
+  name: Gaussian Blur 3x3 (8-bit gray, Vitis Vision)
+  version: "1.1"
+  category: image
+  description: >-
+    8비트 회색조 영상에 Vitis Vision L1 GaussianBlur 로 3x3 Gaussian 필터(가장자리 0 채움)를 적용합니다.
+    흐린 화소마다 사용자 함수 isc_post 를 넣을 수 있습니다.
+
+input:
+  representation: binary
+  # u32 rows, u32 cols, u8 pixels[rows][cols]  (리틀 엔디안 헤더, 행 우선)
+  format: isc_gray8
+  min_bytes: 9
+
+output:
+  representation: binary
+  # 입력과 같은 형식 (rows, cols, pixels)
+  format: isc_gray8
+  variable_size: true
+
+parameters:
+  sigma_milli:
+    type: integer
+    # 커널의 실행 인자다(가중치를 장치가 계산). 바꿔도 장치 바이너리는 같다.
+    # 플랫폼 파라미터에 실수형이 없어 1/1000 단위 정수로 받는다 (500 = 0.5).
+    scope: host
+    description: Gaussian 표준편차 x 1000 (공식 3x3 테스트 값 0.5 = 500)
+    default: 500
+    minimum: 100
+    maximum: 10000
+
+user_logic:
+  template: logic.hpp.template
+  staged_header: isc_user_logic.hpp
+  functions:
+    - symbol: isc_post
+      signature: "uint8_t isc_post(uint8_t px)"
+      when: "출력 화소마다 1번, GaussianBlur 가 흐리게 한 직후. 반환값이 그 자리의 출력 화소"
+
+baseline:
+  # 장치는 고정소수점 가중치를 쓰므로 OpenCV 와 화소값이 조금 다를 수 있다 (공식 테스트는 차이 2 이하 허용).
+  # 그래서 플랫폼 정확성 대조(exact)에는 쓰지 않고, 허용오차 비교는 검증 스크립트가 따로 한다.
+  equivalence: none
+  description: OpenCV cv2.GaussianBlur(3x3, BORDER_CONSTANT)
+  requires: cv2
+
+runtime:
+  backend: xrt
+
+kernel:
+  name: isc_gaussian3x3
+  source: kernel/gaussian_kernel.cpp
+  include_dirs:
+    - ${VITIS_LIBRARIES}/vision/L1/include
+  arguments:
+    - {name: img_in, kind: buffer, direction: in}
+    - {name: img_out, kind: buffer, direction: out}
+    - {name: rows, kind: scalar, direction: in}
+    - {name: cols, kind: scalar, direction: in}
+    - {name: sigma_bits, kind: scalar, direction: in}
+  memory:
+    - {port: m_axi_gmem1, bank: 0}
+    - {port: m_axi_gmem2, bank: 1}
+
+build:
+  platform: xilinx_u50_gen3x16_xdma_5_202210_1
+  memory_type: HBM
+  targets: [hw_emu, hw]
+
+validation:
+  mode: cross_target
+  reference_target: hw_emu

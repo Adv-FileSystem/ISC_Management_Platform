@@ -1,11 +1,11 @@
 operation:
   id: snappy_compress
   name: Snappy block compression (Vitis Data Compression)
-  version: "1.0"
+  version: "1.1"
   category: compression
   description: >-
-    임의 파일을 64 KiB 블록 단위 Snappy 로 압축합니다. Vitis Data Compression L2
-    xilSnappyCompress 커널(공식 소스 그대로)을 감싼 프로토타입 연산입니다.
+    임의 파일을 Vitis Data Compression L2 xilSnappyCompress 로 64 KiB 블록 단위 Snappy 압축합니다.
+    압축 전 바이트마다 사용자 함수 isc_pre 를 넣을 수 있습니다.
 
 input:
   representation: raw_bytes
@@ -20,6 +20,14 @@ output:
 
 parameters: {}
 
+user_logic:
+  template: logic.hpp.template
+  staged_header: isc_user_logic.hpp
+  functions:
+    - symbol: isc_pre
+      signature: "uint8_t isc_pre(uint8_t b)"
+      when: "입력 바이트마다 1번, 압축하기 직전. 반환값이 압축되는 바이트"
+
 baseline:
   # CPU Snappy 와 커널은 서로 다른(둘 다 올바른) 압축 바이트를 낼 수 있어 풀어서 원본과 비교한다.
   equivalence: none
@@ -29,7 +37,7 @@ runtime:
   backend: xrt
 
 kernel:
-  name: xilSnappyCompress
+  name: isc_snappy_compress
   source: kernel/snappy_kernel.cpp
   include_dirs:
     - ${VITIS_LIBRARIES}/data_compression/L1/include/hw
@@ -42,9 +50,11 @@ kernel:
     - {name: in_block_size, kind: buffer, direction: in}
     - {name: block_size_in_kb, kind: scalar, direction: in}
     - {name: input_size, kind: scalar, direction: in}
+    - {name: staged, kind: buffer, direction: out}
   memory:
     - {port: m_axi_gmem0, bank: 0}
     - {port: m_axi_gmem1, bank: 1}
+    - {port: m_axi_gmem2, bank: 2}
 
 build:
   platform: xilinx_u50_gen3x16_xdma_5_202210_1

@@ -1,186 +1,180 @@
 # `aggregate` — 조건에 맞는 값의 건수·합계·최솟값·최댓값 (Hook형)
 
-| 개발 방식 | 사용자가 작성하는 것 | 커널 | 지원 타입 | 플랫폼 자체 테스트 | 공식 라이브러리 테스트 |
-|---|---|---|---|---|---|
-| Hook형 | `bool isc_where(T value)`의 `return` 한 줄 | 플랫폼이 생성하는 래퍼 커널(`kernel/aggregate.cpp.tmpl`)에 사용자 함수를 끼워 빌드 | 정수만: `u8 u16 u32 u64 i8 i16 i32 i64` (`f32` 불가) | ✅ 통과 (2026-11-05, `i32`) | — 해당 없음 |
+| 개발 방식 | 사용하는 라이브러리 함수 | 검증 상태 |
+|---|---|---|
+| Hook형 | 없음 — 플랫폼이 생성하는 래퍼 커널(`kernel/aggregate.cpp.tmpl`)에 사용자 함수 `isc_where`를 끼워 빌드 | 플랫폼 자체 테스트 ✅ (`i32`) · 공식 라이브러리 테스트 해당 없음 (플랫폼 전용) (검증 장치 AMD Alveo U50 · [검증 기록](../../../verification/u50_vitis_libraries/results/aggregate.md)) |
 
-## 1. 시나리오
+## 1. 연산 예시
 
-| 항목 | 내용 |
-|---|---|
-| 사용자 | 결제 데이터를 분석하는 데이터 분석가 |
-| 상황 | 1,000원 미만 소액 거래(환불 포함)의 건수·합계·최소·최대를 매일 산출한다. 거래 금액은 원 단위 `i32`이고 환불은 음수다 |
-| 가속하는 단계 | 조건부 집계 |
-| 입력 → 출력 | i32 금액 컬럼 → count·sum·min·max |
-| 완료 기준 | Python 집계와 일치 |
+결제 데이터를 분석하는 데이터 분석가가 1,000원 미만 소액 거래(환불 포함)의 건수·합계·최솟값·최댓값을 매일 산출합니다. 거래 금액은 원 단위 정수이고 환불은 음수입니다. 이 조건부 집계를 CPU 대신 FPGA에서 하고, 집계할 조건은 사용자가 C++ `return` 한 줄로 씁니다.
 
-## 2. 연산 요약
+### 1.1. 분석 코드 안에서 직접 집계하는 기존 방식
 
-| 항목 | 내용 |
-|---|---|
-| 입력 | 한 정수 타입 `T`의 값을 little-endian으로 이어 쓴 파일 (헤더 없음). 빈 파일 허용 |
-| 출력 | 고정 32바이트: little-endian 64비트 값 4개 `count, sum, min, max` |
-| 부호 | 부호 있는 `T`(`i8`~`i64`)는 64비트로 부호 확장해 집계 → `sum`·`min`·`max`를 **부호 있는 `i64`** 로 읽음 (`struct` `"<Qqqq"`). 부호 없는 `T`는 `"<QQQQ"` |
-| 넘침 | `sum`은 64비트에서 넘치면 감김(wrap) |
-| 해당 없음 | 조건을 만족한 값이 하나도 없으면 네 값 모두 0 |
-| 사용자 함수 | `inline bool isc_where(T value)` — `true`인 값만 집계 |
-| 파라미터 | 없음 |
-| 지원하지 않는 것 | 평균·분산 등 다른 통계(평균은 `sum / count`로 직접 계산), 그룹별 집계(GROUP BY), 실수(`f32`) 입력, 여러 컬럼 |
+```python
+import pandas as pd
 
-작은 예: `T = i32`, 조건 `value < 1000`, 입력 `[500, -200, 1500, 999]` → `count=3, sum=1299, min=-200, max=999`
-
-## 3. 준비
-
-- 공통 설치와 환경 확인: [README 1절](../../../README.md#1-설치-및-환경-구성)
-- 이 연산은 `VITIS_LIBRARIES`가 필요 없습니다.
-- 모든 명령은 **저장소 루트**에서 실행합니다. 실습 파일은 `datasets/aggregate/`(git에 올라가지 않음)에 만듭니다.
-
-## 4. 개발 절차
-
-### 4.1. 입력 만들기
-
-거래 10,000건(-2,000 ~ 20,000원, 음수는 환불, 고정 시드)을 `i32` little-endian으로 씁니다.
-
-```bash
-mkdir -p datasets/aggregate
-python3 - <<'EOF'
-import random, struct
-rng = random.Random(21)
-tx = [rng.randint(-2000, 20000) for _ in range(10000)]   # 음수 = 환불
-open("datasets/aggregate/tx.bin", "wb").write(struct.pack(f"<{len(tx)}i", *tx))
-EOF
+tx = pd.read_csv("transactions.csv")["amount"]
+small = tx[tx < 1000]
+print(small.count(), small.sum(), small.min(), small.max())
 ```
 
-### 4.2. 로직 파일 만들기
+### 1.2. ISC 전주기 시스템 기반의 방식
+
+```bash
+python3 isc/operations/aggregate/examples/make_input.py --csv transactions.csv --column amount -o tx.bin   # CSV 한 열 → 연산 입력 형식
+isc template aggregate --type i32 -o small_tx.hpp                                                        # 로직 시작 파일 받기
+# small_tx.hpp의 return 줄을 "return value < 1000;"로 고침 (2.3)
+isc run small_tx.hpp --input tx.bin --output small_tx.stats --target hw                                    # FPGA가 조건부 집계 (모듈은 자동 생성)
+```
+
+- 입력: 한 정수 타입 `T`의 값을 little-endian으로 이어 쓴 파일 (헤더 없음, 빈 파일 허용). 2.1의 스크립트가 CSV 한 열에서 만들어 줍니다. **정수만** 지원(`u8 u16 u32 u64 i8 i16 i32 i64`, `f32` 불가). 실수는 고정 소수점 정수로 바꿔 넣습니다(예: 0.01 단위 → ×100)
+- 출력: 고정 32바이트, little-endian 64비트 값 4개 `count, sum, min, max`. 부호 있는 `T`면 `sum`·`min`·`max`를 부호 있는 `i64`로 읽습니다(`struct` `"<Qqqq"`), 부호 없는 `T`면 `"<QQQQ"`. 1.1의 네 값과 같습니다
+- 조건을 만족한 값이 없으면 네 값 모두 0입니다. `sum`은 64비트에서 넘치면 감깁니다
+- 평균은 `sum / count`로 직접 계산합니다. 분산 같은 다른 통계, 그룹별 집계(GROUP BY), 여러 열은 지원하지 않습니다
+- 실제로 따라 할 절차는 2절(개발 절차)과 3절(실행 방법)에 있습니다.
+
+## 2. 개발 절차
+
+모든 명령은 저장소 루트에서 실행합니다. 이 연산은 `VITIS_LIBRARIES`가 필요 없습니다.
+
+### 2.1. 입력 준비
+
+**사용자가 할 일**: 집계할 열을 이 연산의 입력 형식(`T` 값의 나열)으로 변환합니다. CSV라면 `--csv`·`--column`으로 바로 변환되고(코드 수정 불필요), 다른 형식이거나 타입이 `i32`가 아니면 스크립트를 고칩니다.
+
+```bash
+# 내 CSV의 한 열 → i32 값 나열
+python3 isc/operations/aggregate/examples/make_input.py --csv [CSV 파일] --column [열 이름] -o datasets/aggregate/[이름].bin
+
+# 또는 예시(거래 10,000건, -2,000 ~ 20,000원, 음수 = 환불, 고정 시드)로 먼저 해 보기
+python3 isc/operations/aggregate/examples/make_input.py               # → datasets/aggregate/tx.bin
+```
+
+[`examples/make_input.py`](examples/make_input.py) 전체 코드입니다(주석 제외). `VALUE_FORMAT`(값 타입)·`make_sample()`(예시 데이터)·`read_csv()`(CSV 읽기)만 고치고, `encode()`(입력 형식)와 `main()`은 그대로 둡니다. `VALUE_FORMAT`은 2.2의 `--type`과 같아야 합니다.
+
+```python
+import argparse
+import csv
+import random
+import struct
+from pathlib import Path
+
+DEFAULT_OUTPUT = "datasets/aggregate/tx.bin"
+VALUE_FORMAT = "i"
+
+
+def make_sample() -> list:
+    rng = random.Random(21)
+    return [rng.randint(-2000, 20000) for _ in range(10000)]
+
+
+def read_csv(path: str, column: str) -> list:
+    convert = float if VALUE_FORMAT == "f" else int
+    with open(path, newline="", encoding="utf-8") as f:
+        return [convert(row[column]) for row in csv.DictReader(f) if row[column].strip()]
+
+
+def encode(values: list) -> bytes:
+    return struct.pack(f"<{len(values)}{VALUE_FORMAT}", *values)
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description="aggregate 입력 파일 만들기")
+    parser.add_argument("-o", "--output", default=DEFAULT_OUTPUT)
+    parser.add_argument("--csv", help="실제 데이터 CSV 파일 (머리글 줄 필요)")
+    parser.add_argument("--column", help="--csv에서 읽을 열 이름")
+    args = parser.parse_args()
+    if args.csv and not args.column:
+        parser.error("--csv에는 --column이 필요합니다")
+    values = read_csv(args.csv, args.column) if args.csv else make_sample()
+    out = Path(args.output)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_bytes(encode(values))
+    print(len(values), "values ->", out)
+
+
+if __name__ == "__main__":
+    main()
+```
+
+수정 예 — 소수점이 있는 금액(예: 12.50달러)을 센트 단위 정수로 바꿔 읽기 (위 전체 코드에서 `read_csv()`만 이것으로 바꿈):
+
+```python
+def read_csv(path: str, column: str) -> list:
+    with open(path, newline="", encoding="utf-8") as f:
+        return [round(float(row[column]) * 100) for row in csv.DictReader(f) if row[column].strip()]
+```
+
+### 2.2. 모듈 만들기
+
+**사용자가 할 일**: 값 타입(`--type`, 정수만, 2.1의 `VALUE_FORMAT`과 같게)과 모듈 이름을 정합니다. **로직 파일 이름이 모듈 이름**이 됩니다(예: `small_tx.hpp` → 모듈 `small_tx`).
 
 ```bash
 isc template aggregate --type i32 -o datasets/aggregate/small_tx.hpp
 ```
 
-편집기로 열어 **`return` 줄 하나만** 고칩니다. 파일 이름(`small_tx`)이 모듈 이름이 됩니다.
+시작 파일만 만들어지고 모듈은 아직 없습니다. 모듈은 2.4 또는 3절의 `isc run`이 이 파일로 만듭니다.
+
+### 2.3. 로직 작성
+
+**사용자가 할 일**: `datasets/aggregate/small_tx.hpp`를 열어 `isc_where`의 **`return` 줄**을 집계할 값의 조건으로 바꾸고 `ISC-TODO` 주석을 지웁니다. 고친 뒤의 파일 전체입니다.
 
 ```cpp
+// ISC Hook 시작 파일 — 프로파일 aggregate (i32 값의 조건부 집계)
+//
+// 입력: i32 값(little-endian)이 이어진 파일
+// 출력: 고정 32바이트: little-endian u64 네 개 (count, sum, min, max). 조건을 만족한 값이 없으면 모두 0
+//
+// 고치는 곳: 아래 함수의 return 줄만. 함수 이름과 인자 이름(value)은 바꾸지 마십시오.
+// 인자 타입(int32_t)이 입력 값의 타입을 정합니다. 함수가 true 를 돌려준 값만 집계됩니다.
+// 예)  return value >= 1000;
+//      return value >= 100 && value < 200;
+//      return (value & 1) == 0;
+// 쓸 수 없는 것: 동적 할당, 파일 입출력, HLS INTERFACE 지시어.
+#pragma once
+
+#include <ap_int.h>
+#include <stdint.h>
+
 inline bool isc_where(int32_t value) {
-    return value < 1000;     // 고친 줄 (ISC-TODO 주석도 함께 지움)
+    return value < 1000;
 }
 ```
 
 - 함수 이름 `isc_where`와 인자 이름 `value`는 바꾸지 않습니다. 모든 값을 집계하려면 `return true;`로 두고 `ISC-TODO` 주석만 지웁니다.
-- 쓸 수 없는 것: 동적 할당, 파일·소켓 입출력, `#pragma HLS INTERFACE`.
+- 다른 조건 예: `return value >= 100 && value < 200;`, `return (value & 1) == 0;`(짝수). 여러 조건의 집계가 필요하면 조건마다 로직 파일(모듈)을 따로 만듭니다.
+- 쓸 수 없는 것: 동적 할당, 파일·소켓 입출력, `#pragma HLS INTERFACE`. 보조 함수나 상수를 추가하는 것은 됩니다.
 
-### 4.3. 에뮬레이션 실행 (hw_emu)
+### 2.4. 검사
 
-```bash
-isc run datasets/aggregate/small_tx.hpp --input datasets/aggregate/tx.bin --output datasets/aggregate/result.bin
-```
-
-실제 출력 (발췌):
-
-```text
-small_tx: created /home/.../ISC_Management_Platform/modules/small_tx (profile aggregate)
-small_tx [hw_emu] succeeded  run_id=20261105T110128-245685
-  device     : [0] xilinx_u50_gen3x16_xdma_5_202210_1  (emulated)
-  build      : cache hit  80b9201ff8870989e4cb79b9170872d9
-  input      : 40000 bytes  /home/.../datasets/aggregate/tx.bin
-  output     : 32 bytes  /home/.../datasets/aggregate/result.bin
-  validation : PASS  (cross_target) ran on the reference target itself; nothing to compare
-```
-
-`validation : PASS`는 hw_emu가 자기 자신을 기준으로 삼았다는 뜻일 뿐입니다. 집계가 맞는지는 다음 단계에서 확인합니다.
-
-### 4.4. 결과 확인
-
-32바이트를 `count`(부호 없음)와 `sum`·`min`·`max`(입력이 `i32`이므로 부호 있음)로 풀어 Python 집계와 비교합니다.
+**사용자가 할 일**: 2.3에서 고친 로직 파일로 모듈을 만들고(이미 있으면 갱신), 빌드하기 전에 검사합니다.
 
 ```bash
-python3 - <<'EOF'
-import struct
-data = open("datasets/aggregate/tx.bin", "rb").read()
-tx = struct.unpack(f"<{len(data)//4}i", data)
-sel = [v for v in tx if v < 1000]
-expected = (len(sel), sum(sel), min(sel), max(sel)) if sel else (0, 0, 0, 0)
-count, total, low, high = struct.unpack("<Qqqq", open("datasets/aggregate/result.bin", "rb").read())
-print(f"count={count} sum={total} min={low} max={high}")
-print("MATCH" if (count, total, low, high) == expected else "MISMATCH")
-EOF
+isc new-custom --from datasets/aggregate/small_tx.hpp       # 로직 파일로 모듈 만들기(또는 갱신) + 정적 검사
+isc check small_tx
 ```
 
-```text
-count=1390 sum=-694618 min=-1998 max=999
-MATCH
-```
+`problem`이 있으면 빌드·실행이 진행되지 않습니다. 인자 타입이 실수(`float`)면 `unsupported type` 오류가 나므로 정수 타입으로 바꿉니다.
 
-### 4.5. U50 실행 (hw)
+## 3. 실행 방법
+
+**사용자가 할 일**: `--input`에 2.1의 파일, `--output`에 결과를 저장할 경로를 지정합니다. 결과 확인 스크립트([`examples/check_output.py`](examples/check_output.py))의 `[바꾸는 곳]` `selected()`를 2.3과 **같은 조건**으로, `VALUE_FORMAT`·`RESULT_FORMAT`을 값 타입으로 맞춥니다(예시 그대로면 고칠 것 없음).
 
 ```bash
-isc run datasets/aggregate/small_tx.hpp --input datasets/aggregate/tx.bin --output datasets/aggregate/result_hw.bin --target hw
-```
+# 에뮬레이션 실행 — 로직 파일을 넘기면 모듈 갱신 → 정적 검사 → 빌드(처음 한 번 수 분) → 실행 → 기록
+isc run datasets/aggregate/small_tx.hpp --input datasets/aggregate/tx.bin --output datasets/aggregate/result.emu.bin
 
-플랫폼이 hw_emu 기준 출력을 먼저 만들고 → hw 빌드(처음 한 번 수십 분) → 카드 실행 → 두 출력의 바이트 비교를 합니다. 4.4의 코드에서 `result.bin`을 `result_hw.bin`으로 바꿔 한 번 더 확인합니다.
+# 결과 확인: 같은 조건으로 Python에서 집계한 결과와 비교 — MATCH면 정상
+python3 isc/operations/aggregate/examples/check_output.py datasets/aggregate/result.emu.bin --input datasets/aggregate/tx.bin
 
-실제 출력 (발췌, 빌드 캐시 재사용):
+# FPGA 카드 실행 (hw) (처음 한 번 hw 빌드 수십 분) — 카드 출력이 에뮬레이션 출력과 같은지 플랫폼이 자동 비교
+isc run datasets/aggregate/small_tx.hpp --input datasets/aggregate/tx.bin --output datasets/aggregate/result.hw.bin --target hw
+python3 isc/operations/aggregate/examples/check_output.py datasets/aggregate/result.hw.bin --input datasets/aggregate/tx.bin
 
-```text
-small_tx [hw] succeeded  run_id=20261105T111257-c24f46
-  device     : [0] xilinx_u50_gen3x16_xdma_base_5
-  build      : cache hit  931000e77c59334ff944d44307a5feba
-  input      : 40000 bytes  /home/.../datasets/aggregate/tx.bin
-  output     : 32 bytes  /home/.../datasets/aggregate/result_hw.bin
-  kernel_ms  : 5.414
-  validation : PASS  (cross_target) matches reference target output (32 bytes)
-```
-
-`validation : PASS ... matches reference target output`는 카드 출력이 hw_emu 출력과 바이트까지 같다는 뜻입니다. 결과 확인 코드를 hw 출력에 적용한 결과:
-
-```text
-count=1390 sum=-694618 min=-1998 max=999
-MATCH
-```
-
-### 4.6. 기록 확인
-
-```bash
+# 실행 기록
 isc records --module small_tx
 isc show [실행 ID]
 ```
 
-### 4.7. 로직을 바꿀 때
-
-`datasets/aggregate/small_tx.hpp`를 고친 뒤 4.3의 명령을 다시 실행하면 모듈의 `logic.hpp`가 갱신되고(`updated`) 다시 빌드합니다. 상수 하나만 바꿔도 새 빌드이므로 hw_emu에서 확인한 뒤 hw로 실행합니다.
-
-## 5. 내 데이터에 적용하기
-
-| 바꿀 것 | 방법 |
-|---|---|
-| 값 타입 | `isc template aggregate --type <T>`와 입력 파일 타입을 함께 바꿈 (정수만). 결과 해석: 부호 있는 `T` → `"<Qqqq"`, 부호 없는 `T` → `"<QQQQ"` |
-| 조건 | `return` 줄만 수정. 예: `return value >= 100 && value < 200;`, `return (value & 1) == 0;` (짝수) |
-| 평균 | `sum / count` (count가 0이면 해당 없음) |
-| 여러 조건의 집계 | 조건마다 로직 파일(모듈)을 따로 만들어 실행 |
-
-## 6. 문제 해결
-
-| 증상 | 원인 | 해결 |
-|---|---|---|
-| `error: unsupported --type 'f32'; choose one of: u8, u16, ...` (`isc template`) | `aggregate`는 정수만 지원 | 실수는 고정 소수점 정수로 바꿔 저장 (예: 0.01 단위 → ×100 후 `i32`/`i64`) |
-| ``error: unsupported type `float` for the parameter of `isc_where`; ...`` (`isc run`, `isc new-custom --from`) | 직접 쓴 로직 파일의 인자 타입이 실수 | 위와 같이 정수 타입으로 바꿈 |
-| `sum`이 매우 큰 양수로 보임 | 부호 있는 입력의 결과를 `"<QQQQ"`로 읽음 | 4.4처럼 `"<Qqqq"`로 읽음 |
-| 네 값이 모두 0 | 조건을 만족한 값이 없음 | 정상 동작. 조건과 입력 범위 확인 |
-| `warning: ... still has the starter marker ISC-TODO` | `return` 줄을 고치지 않았거나 주석을 남김 | `return` 줄 작성 후 `ISC-TODO` 주석 삭제 |
-| `no hook profile matches this logic file` | 함수 이름이 `isc_where`가 아님 | 함수 이름을 되돌림 |
-
-## 7. 검증 기록
-
-### 7.1. 플랫폼 자체 테스트
-
-| 항목 | 내용 |
-|---|---|
-| 확인일 | 2026-11-05 |
-| 환경 | Ubuntu 22.04.5 LTS (커널 6.8.0-138), Python 3.10.12, Vitis 2025.1, XRT 2.19.194 (2025.1), Vitis Libraries `v2025.1_update2` (커밋 b2c657d), AMD Alveo U50 (`xilinx_u50_gen3x16_xdma_base_5`), 저장소 기준 커밋 `8742866` |
-| 실행한 단계 | 이 문서의 명령을 저장소 루트에서 순서대로 그대로 실행 (입력 만들기 → 로직 파일 → hw_emu(모듈 생성·검사 포함) → 결과 확인 → hw → 결과 확인) |
-| hw_emu | 통과 — 실행 `20261105T110128-245685`, Python 집계와 일치 (`count=1390 sum=-694618 min=-1998 max=999`) |
-| hw (U50) | 통과 — 실행 `20261105T111257-c24f46`, hw 출력 = hw_emu 출력(플랫폼 자동 대조) = CPU 참조 (Python 집계) |
-| 확인하지 않은 것 | 성능(가속 효과)은 측정하지 않음. 이 문서의 입력 한 가지로만 확인 |
-
-### 7.2. 공식 라이브러리 테스트
-
-**해당 없음** — 이 연산에 대응하는 Vitis Libraries 공식 테스트가 없습니다 (플랫폼 전용 연산).
+- **로직을 바꿀 때**: `small_tx.hpp`를 고친 뒤 위 `isc run` 명령을 다시 실행하면 모듈의 `logic.hpp`가 갱신되고(`updated`) 다시 빌드합니다. 상수 하나만 바꿔도 새 빌드이므로 hw_emu에서 확인한 뒤 hw로 실행합니다. `check_output.py`의 `selected()`도 같이 바꿉니다.
+- `sum`이 매우 큰 양수로 보이면 부호 있는 입력의 결과를 `"<QQQQ"`로 읽은 경우입니다. `"<Qqqq"`로 읽습니다.
+- 터미널 출력을 파일로도 남기려면 명령 뒤에 `2>&1 | tee [로그 파일]`을 붙입니다.

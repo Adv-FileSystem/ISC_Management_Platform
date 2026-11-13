@@ -1,11 +1,11 @@
 operation:
   id: mc_european
   name: Monte Carlo European option pricing (Vitis Quantitative Finance)
-  version: "1.0"
+  version: "1.1"
   category: finance
   description: >-
-    유럽형 옵션 N건의 가격을 Monte Carlo 로 계산합니다. Vitis Quantitative Finance L2
-    MCEuropeanEngine 을 옵션마다 호출하는 프로토타입 연산입니다.
+    유럽형 옵션 N건의 가격을 Vitis Quantitative Finance L2 MCEuropeanEngine 의 Monte Carlo 로
+    계산합니다. 엔진에 넘기기 전 변동성을 정하는 사용자 함수 isc_volatility 를 넣을 수 있습니다.
 
 input:
   representation: binary
@@ -23,17 +23,25 @@ parameters:
   samples:
     type: integer
     scope: host
-    description: 옵션 하나당 Monte Carlo 경로 수 (공식 테스트 값 40000)
+    description: 옵션 하나당 Monte Carlo 경로 수
     default: 4096
     minimum: 1024
     maximum: 1048576
   time_steps:
     type: integer
     scope: host
-    description: 경로당 시간 단계 수 (공식 테스트 값 1 또는 10)
+    description: 경로당 시간 단계 수
     default: 1
     minimum: 1
     maximum: 100
+
+user_logic:
+  template: logic.hpp.template
+  staged_header: isc_user_logic.hpp
+  functions:
+    - symbol: isc_volatility
+      signature: "float isc_volatility(float sigma)"
+      when: "옵션마다 1번, 엔진에 넘기기 직전. 반환값이 엔진이 쓰는 변동성"
 
 baseline:
   # Monte Carlo 는 근사값이라 해석해와 바이트가 같지 않다. 정확성 판정은 상대오차로 한다.

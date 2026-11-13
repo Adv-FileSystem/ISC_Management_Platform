@@ -1,0 +1,68 @@
+operation:
+  id: gemv_i32
+  name: GEMV (int32, Vitis BLAS)
+  version: "1.1"
+  category: linear_algebra
+  description: >-
+    y_out = alpha * A x + beta * y (int32), Vitis BLAS L1 gemv. 행마다 결과를 정하는 사용자 함수
+    isc_decide 를 넣을 수 있습니다.
+
+input:
+  representation: binary
+  # u32 m, u32 n, i32 alpha, i32 beta, i32 A[m][n], i32 x[n], i32 y[m]  (리틀 엔디안, 행 우선)
+  format: isc_gemv_i32
+  min_bytes: 16
+
+output:
+  representation: binary
+  # i32 y_out[m] (행마다 isc_decide 가 돌려준 값)
+  format: isc_i32_vector
+  variable_size: true
+
+parameters: {}
+
+user_logic:
+  template: logic.hpp.template
+  staged_header: isc_user_logic.hpp
+  functions:
+    - symbol: isc_decide
+      signature: "int32_t isc_decide(int32_t score)"
+      when: "행(고객)마다 1번, gemv 가 점수를 계산한 직후. 반환값이 그 행의 출력"
+
+baseline:
+  # 정수 연산이라 장치 출력과 바이트까지 같아야 한다 (int32 wrap 포함).
+  equivalence: exact
+  description: numpy int64 행렬-벡터 곱 후 int32 로 자름
+  requires: numpy
+
+runtime:
+  backend: xrt
+
+kernel:
+  name: isc_gemv_i32
+  source: kernel/gemv_i32_kernel.cpp
+  include_dirs:
+    - ${VITIS_LIBRARIES}/blas/L1/include/hw
+  arguments:
+    - {name: a, kind: buffer, direction: in}
+    - {name: x, kind: buffer, direction: in}
+    - {name: y, kind: buffer, direction: in}
+    - {name: y_out, kind: buffer, direction: out}
+    - {name: m, kind: scalar, direction: in}
+    - {name: n, kind: scalar, direction: in}
+    - {name: alpha, kind: scalar, direction: in}
+    - {name: beta, kind: scalar, direction: in}
+  memory:
+    - {port: m_axi_gmem0, bank: 0}
+    - {port: m_axi_gmem1, bank: 1}
+    - {port: m_axi_gmem2, bank: 2}
+    - {port: m_axi_gmem3, bank: 3}
+
+build:
+  platform: xilinx_u50_gen3x16_xdma_5_202210_1
+  memory_type: HBM
+  targets: [hw_emu, hw]
+
+validation:
+  mode: cross_target
+  reference_target: hw_emu

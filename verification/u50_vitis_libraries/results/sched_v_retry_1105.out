@@ -1,0 +1,10 @@
+11-06 10:17:35 previous scheduler done; retry starts
+11-06 10:27:35 start vendor sec_crc32 (running 0, free 88 GB)
+11-06 10:37:36 start vendor comp_gzip_hbm (running 1, free 77 GB)
+11-06 10:47:37 start vendor graph_renumber (running 2, free 63 GB)
+11-06 11:05:39 vendor sec_crc32 finished: exit 0
+11-06 11:05:39 start vendor graph_merge (running 2, free 57 GB)
+11-06 11:55:44 vendor graph_renumber finished: exit 0
+11-06 12:08:16 vendor graph_merge finished: exit 0
+11-06 13:15:51 vendor comp_gzip_hbm finished: exit 0
+11-06 13:16:22 all builds done

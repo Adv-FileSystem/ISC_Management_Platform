@@ -59,6 +59,19 @@ class OperationSpec:
         return self.raw.get("hook") or {}
 
     @property
+    def user_logic_spec(self) -> dict[str, Any]:
+        """Where a built-in operation lets the user add one fixed-signature function."""
+        return self.raw.get("user_logic") or {}
+
+    @property
+    def has_user_logic(self) -> bool:
+        return bool(self.user_logic_spec)
+
+    @property
+    def user_logic_template(self) -> Path:
+        return self.directory / str(self.user_logic_spec["template"])
+
+    @property
     def parameter_specs(self) -> dict[str, dict[str, Any]]:
         return self.raw.get("parameters") or {}
 
@@ -164,6 +177,11 @@ class OperationSpec:
             "input": self.input_contract,
             "output": self.output_contract,
             "parameters": self.parameter_specs,
+            "user_logic": [
+                {"symbol": item["symbol"], "signature": item["signature"],
+                 "when": item.get("when", "")}
+                for item in self.user_logic_spec.get("functions", [])
+            ],
             "baseline": {
                 "available": self.has_baseline,
                 "equivalence": self.baseline_equivalence,
@@ -255,6 +273,10 @@ def _load_spec(entry_id: str) -> OperationSpec:
     _validate_baseline_spec(path, raw.get("baseline") or {})
     if kind == "hook":
         _validate_hook_spec(path, raw.get("hook"))
+    if raw.get("user_logic") is not None:
+        if kind != "builtin":
+            raise OperationError(f"{path}: user_logic is only for built-in operations")
+        _validate_user_logic_spec(path, raw["user_logic"])
     return OperationSpec(
         id=declared_id,
         name=str(metadata.get("name") or declared_id),
@@ -265,6 +287,23 @@ def _load_spec(entry_id: str) -> OperationSpec:
         directory=path.parent.resolve(),
         raw=raw,
     )
+
+
+def _validate_user_logic_spec(path: Path, spec: Any) -> None:
+    if not isinstance(spec, dict):
+        raise OperationError(f"{path}: user_logic must be a mapping")
+    for field in ("template", "staged_header", "functions"):
+        if not spec.get(field):
+            raise OperationError(f"{path}: user_logic.{field} is required")
+    functions = spec["functions"]
+    if not isinstance(functions, list) or not all(
+            isinstance(item, dict) and item.get("symbol") and item.get("signature")
+            for item in functions):
+        raise OperationError(
+            f"{path}: user_logic.functions must list mappings with symbol and signature")
+    template = path.parent / str(spec["template"])
+    if not template.is_file():
+        raise OperationError(f"{path}: user_logic template not found: {template}")
 
 
 def _validate_hook_spec(path: Path, spec: Any) -> None:

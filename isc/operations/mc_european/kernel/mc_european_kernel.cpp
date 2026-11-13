@@ -2,15 +2,17 @@
  * European option pricing by Monte Carlo, backed by Vitis Quantitative Finance L2
  * (xf::fintech::MCEuropeanEngine, Vitis Libraries 2025.1).
  *
- * Prototype: the engine call and its settings (float, UN=2, tolerance 0.02) are the official
- * L2 test kernel's (L2/tests/MCEuropeanEngine/kernel/mc_euro_k.cpp). This wrapper only loops
- * over a batch of options read from memory; seeds are fixed per option so runs are repeatable.
+ * Engine settings: float, UN=2, tolerance 0.02. The kernel loops over a batch of options read from
+ * memory; seeds are fixed per option so runs are repeatable. Each option's volatility goes through
+ * the user function isc_volatility before the engine call
+ * (isc_user_logic.hpp, staged by ISC from the module's logic file or the operation's starter).
  */
 #include <stdint.h>
 
 #include "xf_fintech/enums.hpp"
 #include "xf_fintech/mc_engine.hpp"
 #include "xf_fintech/rng.hpp"
+#include "isc_user_logic.hpp"
 
 typedef float DT;
 static const int kFields = 8;  // S, K, sigma, q, r, T, type, reserved
@@ -30,7 +32,7 @@ options_loop:
     for (uint32_t i = 0; i < count; ++i) {
         DT underlying = options[i * kFields + 0];
         DT strike = options[i * kFields + 1];
-        DT volatility = options[i * kFields + 2];
+        DT volatility = isc_volatility(options[i * kFields + 2]);
         DT dividend = options[i * kFields + 3];
         DT rate = options[i * kFields + 4];
         DT time_length = options[i * kFields + 5];

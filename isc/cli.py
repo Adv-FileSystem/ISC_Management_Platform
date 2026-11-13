@@ -33,12 +33,12 @@ from isc.benchmark.experiment import ExperimentError
 from isc.lifecycle.orchestrator import revalidate, run as run_module, run_build
 from isc.lifecycle.manifest import ManifestError
 from isc.operations import (
-    get_operation, get_profile, operations as catalog_operations,
+    get_operation, get_profile, operation_ids, operations as catalog_operations,
     parse_parameter_assignments, profiles as catalog_profiles,
 )
 from isc.generator.scaffold import (
     create_hook_module, create_module, create_module_from_logic, is_logic_file,
-    render_profile_starter,
+    render_operation_starter, render_profile_starter,
 )
 from isc.lifecycle.workspace import Workspace
 
@@ -51,7 +51,9 @@ def build_parser() -> argparse.ArgumentParser:
         prog="isc", description="ISC module lifecycle platform")
     parser.add_argument("--workspace", help="workspace root (default: nearest parent with modules/)")
     parser.add_argument("--json", action="store_true", help="print machine-readable JSON")
-    commands = parser.add_subparsers(dest="command", required=True)
+    # Without a metavar argparse prints all 23 command names twice in one
+    # unbroken line at the top of `isc --help`; the list below says it better.
+    commands = parser.add_subparsers(dest="command", required=True, metavar="<command>")
 
     commands.add_parser("doctor", help="check the local environment")
     commands.add_parser("devices", help="list devices visible to each backend")
@@ -74,11 +76,15 @@ def build_parser() -> argparse.ArgumentParser:
         "--set", action="append", dest="settings", metavar="NAME=VALUE",
         help="set an operation parameter (repeatable)",
     )
+    new.add_argument("--logic", dest="logic_file", metavar="FILE", nargs="?", const="",
+                     help="add your function to the operation; without FILE the module gets the "
+                          "starter as logic.hpp (edit its return line)")
 
     template = commands.add_parser(
-        "template", help="write a starter file for a hook profile (no module is created)")
-    template.add_argument("profile_id")
-    template.add_argument("--type", default="u32",
+        "template", help="write a starter file for a hook profile or an operation's user logic "
+                         "(no module is created)")
+    template.add_argument("profile_id", metavar="profile_or_operation")
+    template.add_argument("--type", default=None,
                           help="element type of the input values "
                                "(u8 u16 u32 u64 i8 i16 i32 i64 f32; default u32)")
     template.add_argument("--out-type", dest="out_type",
@@ -338,8 +344,15 @@ def _dispatch(args: argparse.Namespace, workspace: Workspace, emit) -> int:
                          if operation.baseline_requires else "")
                 print(f"baseline    : {operation.baseline_description or 'CPU reference'} "
                       f"({comparable}{needs})")
+            for item in operation.user_logic_spec.get("functions", []):
+                print(f"user logic  : {item['signature']}")
+                if item.get("when"):
+                    print(f"               {item['when']}")
             print("example     :")
             print(f"  isc new mymodule --operation {operation.id}")
+            if operation.has_user_logic:
+                print(f"  isc template {operation.id} -o my_logic.hpp")
+                print(f"  isc new mymodule --operation {operation.id} --logic my_logic.hpp")
         return 0
 
     if command == "describe-profile":
@@ -363,20 +376,32 @@ def _dispatch(args: argparse.Namespace, workspace: Workspace, emit) -> int:
         return 0
 
     if command == "template":
-        profile = get_profile(args.profile_id)
-        text = render_profile_starter(profile, args.type, args.out_type)
+        if args.profile_id in operation_ids():
+            operation = get_operation(args.profile_id)
+            if args.type or args.out_type:
+                raise ValueError(
+                    f"{operation.id} has a fixed function signature; drop --type/--out-type")
+            text = render_operation_starter(operation)
+            entry = operation.id
+            next_step = (f"next: edit the return line, then: isc new <module> "
+                         f"--operation {operation.id} --logic {{path}}")
+        else:
+            profile = get_profile(args.profile_id)
+            text = render_profile_starter(profile, args.type or "u32", args.out_type)
+            entry = profile.id
+            next_step = "next: edit it, then: isc run {path} --input <file>"
         if args.output:
             target = Path(args.output)
             if target.exists():
                 raise FileExistsError(f"{target} already exists; choose another path or remove it")
             target.write_text(text)
             if emit:
-                emit({"profile": profile.id, "written": str(target)})
+                emit({"profile": entry, "written": str(target)})
             else:
                 print(f"wrote {target}")
-                print(f"next: edit it, then: isc run {target} --input <file>")
+                print(next_step.format(path=target))
         elif emit:
-            emit({"profile": profile.id, "text": text})
+            emit({"profile": entry, "text": text})
         else:
             print(text, end="")
         return 0
@@ -392,6 +417,8 @@ def _dispatch(args: argparse.Namespace, workspace: Workspace, emit) -> int:
         path = create_module(
             workspace, args.module_id, operation_id=args.operation,
             name=args.name, parameters=parameters,
+            logic_file=Path(args.logic_file) if args.logic_file else None,
+            logic_starter=args.logic_file == "",
         )
         report = check_module(path)
         if emit:
@@ -401,6 +428,11 @@ def _dispatch(args: argparse.Namespace, workspace: Workspace, emit) -> int:
             for item in sorted(p.relative_to(path) for p in path.rglob("*") if p.is_file()):
                 print(f"  {item}")
             print(f"\noperation: {args.operation}")
+            if args.logic_file:
+                print(f"user logic: {Path(args.logic_file).name}")
+            elif args.logic_file == "":
+                print(f"user logic: logic.hpp (starter: edit its return line in "
+                      f"{path / 'logic.hpp'})")
             if not report.passed:
                 print("setup required before build:")
                 for problem in report.problems:

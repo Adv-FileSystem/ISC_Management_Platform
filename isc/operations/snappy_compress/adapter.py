@@ -13,7 +13,7 @@ FLAG_SNAPPY, FLAG_STORED = 0, 1
 BLOCK_KB = 64
 BLOCK = BLOCK_KB * 1024
 CHUNK = 2 * 1024 * 1024
-ARG_IN, ARG_OUT, ARG_CSIZE, ARG_BSIZE, ARG_BLOCK_KB, ARG_INPUT_SIZE = range(6)
+ARG_IN, ARG_OUT, ARG_CSIZE, ARG_BSIZE, ARG_BLOCK_KB, ARG_INPUT_SIZE, ARG_STAGED = range(7)
 
 
 def execute(session, data: bytes, parameters: dict) -> bytes:
@@ -22,6 +22,7 @@ def execute(session, data: bytes, parameters: dict) -> bytes:
     bo_out = session.buffer(CHUNK, arg=ARG_OUT)
     bo_csize = session.buffer(4 * nblocks_max, arg=ARG_CSIZE)
     bo_bsize = session.buffer(4 * nblocks_max, arg=ARG_BSIZE)
+    bo_staged = session.buffer(CHUNK, arg=ARG_STAGED)          # 덩어리에 isc_pre 를 적용한 바이트
     framed = bytearray()
     stored = blocks = 0
     for start in range(0, len(data), CHUNK):
@@ -29,15 +30,18 @@ def execute(session, data: bytes, parameters: dict) -> bytes:
         sizes = [min(BLOCK, len(chunk) - b) for b in range(0, len(chunk), BLOCK)]
         bo_in.write(chunk.ljust(-(-len(chunk) // BLOCK) * BLOCK, b"\0"))
         bo_bsize.write(struct.pack(f"<{len(sizes)}I", *sizes).ljust(4 * nblocks_max, b"\0"))
-        session.run(bo_in, bo_out, bo_csize, bo_bsize, BLOCK_KB, len(chunk))
+        session.run(bo_in, bo_out, bo_csize, bo_bsize, BLOCK_KB, len(chunk), bo_staged)
         csizes = struct.unpack(f"<{len(sizes)}I", bo_csize.read(4 * len(sizes)))
         out = bo_out.read(CHUNK)
+        staged = None
         for i, (raw, comp) in enumerate(zip(sizes, csizes)):
             blocks += 1
             if 0 < comp < raw:
                 framed += HEADER.pack(raw, comp, FLAG_SNAPPY) + out[i * BLOCK:i * BLOCK + comp]
             else:
-                framed += HEADER.pack(raw, raw, FLAG_STORED) + chunk[i * BLOCK:i * BLOCK + raw]
+                # 저장하는 원본은 isc_pre 를 거친 바이트(staged)다. 사용자 로직이 없으면 chunk 와 같다.
+                staged = staged if staged is not None else bo_staged.read(len(chunk))
+                framed += HEADER.pack(raw, raw, FLAG_STORED) + staged[i * BLOCK:i * BLOCK + raw]
                 stored += 1
     session.metric("blocks", blocks)
     session.metric("stored_blocks", stored)
