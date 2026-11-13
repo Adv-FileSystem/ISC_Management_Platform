@@ -8,7 +8,7 @@ from typing import Any, Callable
 
 import yaml
 
-from isc.generator.generate import HookTypes, SignatureError, parse_signature, render_starter, strip_comments
+from isc.generator.generate import parse_signature, render_starter, strip_comments
 from isc.lifecycle.manifest import Manifest
 from isc.operations import (
     OperationSpec, canonical_profile_id, get_operation, get_profile, profiles,
@@ -56,8 +56,8 @@ def create_module(workspace: Workspace, module_id: str, *, operation_id: str,
         if not logic_file.is_file():
             raise FileNotFoundError(f"logic file not found: {logic_file}")
         logic_name = logic_file.name
-        if logic_name in ("module.yaml", "README.md"):
-            raise ValueError(f"rename the logic file; {logic_name} is used by the module")
+        if logic_name == "module.yaml":
+            raise ValueError("rename the logic file; module.yaml is used by the module")
         logic_text = logic_file.read_text()
 
     manifest: dict[str, Any] = {
@@ -81,9 +81,6 @@ def create_module(workspace: Workspace, module_id: str, *, operation_id: str,
     (destination / "module.yaml").write_text(
         yaml.safe_dump(manifest, sort_keys=False, allow_unicode=True)
     )
-    (destination / "README.md").write_text(
-        _module_readme(module_id, operation, resolved_parameters, logic_name)
-    )
     return destination
 
 
@@ -101,22 +98,14 @@ def render_profile_starter(profile: OperationSpec, in_type: str = "u32",
     return render_starter(template, profile.hook_spec, profile.id, in_type, out_type)
 
 
-def _types_of(source: str, profile: OperationSpec) -> HookTypes | None:
-    try:
-        return parse_signature(source, profile.hook_spec)
-    except SignatureError:
-        return None
-
-
 def create_hook_module(workspace: Workspace, module_id: str, *, profile_id: str,
                        name: str | None = None, logic: str | None = None,
-                       origin: Path | None = None, in_type: str = "u32",
+                       in_type: str = "u32",
                        out_type: str | None = None) -> Path:
     """Create the one editable source file required by a managed hook profile.
 
     `logic` replaces the generated starter when the user already wrote the code;
-    `origin` is the file it came from, recorded in the README. `in_type` and
-    `out_type` choose the element types of the starter.
+    `in_type` and `out_type` choose the element types of the starter.
     """
     _check_module_id(module_id)
     profile = get_profile(profile_id)
@@ -143,9 +132,6 @@ def create_hook_module(workspace: Workspace, module_id: str, *, profile_id: str,
         yaml.safe_dump(manifest, sort_keys=False, allow_unicode=True)
     )
     (destination / "logic.hpp").write_text(logic)
-    (destination / "README.md").write_text(
-        _hook_readme(module_id, profile, _types_of(logic, profile), origin)
-    )
     return destination
 
 
@@ -256,7 +242,7 @@ def create_module_from_logic(workspace: Workspace, logic_path: str | Path, *,
     destination = workspace.modules_dir / module_id
     if not destination.exists():
         create_hook_module(workspace, module_id, profile_id=profile.id, name=name,
-                           logic=source, origin=source_path.resolve())
+                           logic=source)
         return LogicModule(module_id, destination, profile.id, "created")
 
     manifest = Manifest.load(destination)
@@ -270,95 +256,3 @@ def create_module_from_logic(workspace: Workspace, logic_path: str | Path, *,
         return LogicModule(module_id, destination, profile.id, "unchanged")
     current.write_text(source)
     return LogicModule(module_id, destination, profile.id, "updated")
-
-
-def _module_readme(module_id: str, operation: OperationSpec,
-                   parameters: dict[str, Any], logic_name: str | None = None) -> str:
-    parameter_lines = (
-        "\n".join(f"- `{name}`: `{value}`" for name, value in parameters.items())
-        if parameters else "- 설정 가능한 파라미터가 없습니다."
-    )
-    logic_section = ""
-    if operation.has_user_logic:
-        functions = "\n".join(
-            f"- `{item['signature']}` — {item.get('when', '')}"
-            for item in operation.user_logic_spec["functions"]
-        )
-        current = (f"이 모듈은 `{logic_name}`의 함수를 씁니다. 그 파일의 `return` 줄만 고치십시오."
-                   if logic_name else
-                   "이 모듈은 로직 파일 없이 원래 연산을 그대로 씁니다. 로직을 넣으려면 "
-                   f"`isc template {operation.id} -o 파일.hpp`로 시작 파일을 받아 고친 뒤 "
-                   f"`isc new <모듈> --operation {operation.id} --logic 파일.hpp`로 만드십시오.")
-        logic_section = f"""
-## 사용자 로직
-
-{functions}
-
-{current}
-"""
-    return f"""# {module_id}
-
-이 모듈은 ISC 내장 `{operation.id}` 연산을 사용합니다.
-
-{operation.description}
-
-## 설정
-
-{parameter_lines}
-
-하드웨어 커널, 메모리 인터페이스와 호스트 어댑터는 ISC가 관리합니다. 이 모듈에서는
-`module.yaml`에 연산이 허용한 파라미터만 설정하십시오.
-{logic_section}
-## 실행
-
-```bash
-isc describe {operation.id}
-isc check {module_id}
-isc build {module_id} --target hw_emu
-isc run {module_id} --input <파일> --target hw_emu
-```
-
-`--input` 파일은 원시 바이트로 전달되며 실제 입력 제약은
-`isc describe {operation.id}`에서 확인할 수 있습니다.
-"""
-
-
-def _hook_readme(module_id: str, profile: OperationSpec, types: HookTypes | None = None,
-                 origin: Path | None = None) -> str:
-    signature = profile.hook_spec["signature"]
-    names = {
-        "in": types.inp.element.name if types else "T",
-        "out": types.out.element.name if types and types.out else "U",
-    }
-    input_line = str(profile.hook_spec["input_description"]).format(**names)
-    output_line = str(profile.hook_spec["output_description"]).format(**names)
-    origin_note = "" if origin is None else f"""
-## 로직 원본
-
-`logic.hpp` 는 `{origin}` 에서 가져왔습니다. `isc run <로직 파일>` 이나
-`isc new-custom --from <로직 파일>` 을 다시 실행하면 이 모듈의 `logic.hpp` 가 그 파일
-내용으로 갱신됩니다. 로직은 원본 파일에서 고치십시오.
-"""
-    return f"""# {module_id}
-
-이 모듈은 ISC 사용자 Hook 프로파일 `{profile.id}`를 사용합니다.
-
-## 사용자 작성 범위
-
-`logic.hpp`의 `{signature}` 함수만 수정하십시오. 함수 이름과 인자 이름(`value`)은
-바꾸지 마십시오. 인자 타입이 입력 값의 타입을 정하고, 최상위 HLS 커널, 메모리
-인터페이스 및 호스트 어댑터는 그 타입에 맞춰 ISC가 생성합니다.
-
-## 데이터 계약
-
-- 입력: {input_line}
-- 출력: {output_line}
-{origin_note}
-## 실행
-
-```bash
-isc check {module_id}
-isc build {module_id} --target hw_emu
-isc run {module_id} --input <파일> --target hw_emu
-```
-"""
