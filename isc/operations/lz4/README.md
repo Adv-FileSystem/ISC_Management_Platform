@@ -47,7 +47,7 @@ python3 isc/operations/lz4/examples/check_output.py service.log.isclz4 --input s
 
 **사용자가 할 일**: 압축할 로그 파일을 정합니다. 파일을 그대로 쓰므로 변환할 필요가 없습니다.
 
-예시 로그(웹 서버 접근 로그 1,500줄, 약 97 KiB, 고정 시드)로 먼저 해 보려면:
+예시 로그(웹 서버 접근 로그 1,500줄, 약 148 KiB, 고정 시드)로 먼저 해 보려면: 줄마다 접속 IP가 있고, 회원 조회 줄에는 전화번호, 주문 줄에는 카드번호가 들어 있습니다(IP는 문서 예시용 대역, 전화번호·카드번호는 난수로 만든 가짜 값).
 
 ```bash
 python3 isc/operations/lz4/examples/make_input.py                   # → datasets/lz4/service.log
@@ -71,7 +71,14 @@ def make_sample() -> str:
     for i in range(1500):
         level = rng.choice(["INFO", "INFO", "INFO", "WARN", "ERROR"])
         path = rng.choice(["/api/orders", "/api/users", "/health", "/api/cart"])
-        lines.append(f"2026-11-05T10:{i // 60 % 60:02d}:{i % 60:02d}Z {level} GET {path} status=200 latency_ms={rng.randint(1, 900)}\n")
+        ip = f"{rng.choice(['192.0.2', '198.51.100', '203.0.113'])}.{rng.randint(1, 254)}"
+        extra = ""
+        if path == "/api/users":
+            extra = f" phone=010-{rng.randint(0, 9999):04d}-{rng.randint(0, 9999):04d}"
+        elif path == "/api/orders":
+            extra = " card=" + "-".join(f"{rng.randint(0, 9999):04d}" for _ in range(4))
+        lines.append(f"2026-11-05T10:{i // 60 % 60:02d}:{i % 60:02d}Z {level} GET {path} status=200 "
+                     f"latency_ms={rng.randint(1, 900)} client_ip={ip}{extra}\n")
     return "".join(lines)
 
 
