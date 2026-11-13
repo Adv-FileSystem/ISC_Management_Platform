@@ -117,11 +117,14 @@ def _run(command: list[str], timeout: float | None, cwd: Path | None = None, *,
     40-minute build grows while it runs, and survives a failure) and passed to `on_line`. A
     callback that raises must not fail the build, so only its `Exception`s are swallowed.
     The tool leads its own session: a time-out, Ctrl-C or any other way out ends the whole group.
+    Its stdin is /dev/null. In its own session the tool has no controlling terminal, and v++ link
+    runs xsct under rlwrap, which opens /dev/tty whenever stdin is a terminal and fails
+    ("Could not open /dev/tty"), so a build started from an interactive shell broke at link.
     """
     try:
         process = subprocess.Popen(
-            command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1,
-            cwd=str(cwd) if cwd else None, start_new_session=True,
+            command, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+            text=True, bufsize=1, cwd=str(cwd) if cwd else None, start_new_session=True,
         )
     except FileNotFoundError as exc:
         raise BackendError(f"{command[0]} not found on PATH: {exc}") from exc
