@@ -2,7 +2,7 @@
 
 | 개발 방식 | 사용하는 라이브러리 함수 | 검증 상태 |
 |---|---|---|
-| 연산 선택형 + 사용자 로직 `isc_post` | Vitis Codec L2 `xf::codec::resizeTop` (`kernel/bicubic_kernel.cpp`). 축소가 끝난 뒤 화소마다 사용자 함수를 실행 | 플랫폼 자체 테스트 ✅ (1.0 사용자 로직 없음: hw_emu·hw / 1.1 사용자 로직: hw_emu, hw 미실행) · 공식 라이브러리 테스트 ✅ (검증 장치 AMD Alveo U50 · [검증 기록](../../../verification/u50_vitis_libraries/results/image_bicubic.md)) |
+| 연산 선택형 + 사용자 로직 `isc_post` | Vitis Codec L2 `xf::codec::resizeTop` (`kernel/bicubic_kernel.cpp`). 축소가 끝난 뒤 화소마다 사용자 함수를 실행 | 플랫폼 자체 테스트 ✅ (1.0 사용자 로직 없음: hw_emu·hw / 1.1 사용자 로직: hw_emu·hw) · 공식 라이브러리 테스트 ✅ (검증 장치 AMD Alveo U50 · [검증 기록](../../../verification/u50_vitis_libraries/results/image_bicubic.md)) |
 
 ## 1. 연산 예시
 
@@ -149,7 +149,7 @@ isc new train_resize --operation image_bicubic --set out_rows=256 --set out_cols
 
 **사용자가 할 일**: `modules/train_resize/logic.hpp`를 열어 함수 `isc_post`의 `return` 줄을 대비 보정 규칙으로 바꾸고, 그 줄의 `ISC-TODO` 주석을 지웁니다.
 
-아래는 "30 이하는 0, 220 이상은 255, 그 사이는 0~255로 고르게 늘림" 규칙으로 고친 파일 전체입니다.
+아래는 "30 이하는 0, 220 이상은 255, 그 사이(31~219)는 1~253으로 고르게 늘림" 규칙으로 고친 파일 전체입니다.
 
 ```cpp
 #pragma once
