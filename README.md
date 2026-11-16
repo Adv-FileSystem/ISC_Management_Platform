@@ -436,3 +436,8 @@ isc report [실험 이름]
 | [`aggregate`](isc/operations/aggregate/README.md) (플랫폼 Hook) | 1,000 미만 거래(환불 포함)의 건수·합계·최소·최대 | `small_tx` | `small_tx.hpp` (`return` 한 줄) | i32 10,000개 → 32바이트 | Python 집계와 동일 |
 | [`vector_topk`](isc/operations/vector_topk/README.md) (플랫폼 커널) | 열람 권한을 반영한 문서 상위 5개 검색 | `doc_search` | `logic.hpp` (`isc_score`의 `return` 줄), `k=5` 지정 | 2,000×64 int8 → `(id, score)` 5쌍 | numpy 내적에 같은 규칙을 적용해 정렬한 결과와 동일 |
 | [`identity`](isc/operations/identity/README.md) (플랫폼 커널) | 설치 직후 실행 경로 점검 | `env_check` | 없음 | 텍스트 파일 → 같은 바이트 | `cmp`로 원본과 동일 |
+
+
+## 라이선스
+
+이 저장소는 [BSD 3-Clause License](LICENSE)로 배포됩니다.
