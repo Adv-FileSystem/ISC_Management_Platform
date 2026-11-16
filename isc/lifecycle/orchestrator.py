@@ -15,6 +15,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import signal
 import subprocess
 import sys
 import tempfile
@@ -35,6 +36,10 @@ from isc.lifecycle.manifest import Manifest
 from isc.lifecycle.runtime import Runtime
 from isc.lifecycle.validate import ValidationResult, validate
 from isc.lifecycle.workspace import Workspace
+
+# How long a cancelled reference run gets to end its build tools and write its last event
+# before it is killed. Ending a tool group takes milliseconds; this is a generous ceiling.
+REFERENCE_STOP_GRACE_S = 10.0
 
 
 @dataclass
@@ -373,8 +378,8 @@ def _reference_output(workspace: Workspace, manifest: Manifest, data: bytes,
         try:
             # cwd=workspace.root so `python3 -m isc` resolves even when isc is
             # not pip-installed (README's no-install usage path).
-            completed = subprocess.run(command, capture_output=True, text=True, env=env,
-                                       timeout=timeout_seconds, cwd=str(workspace.root))
+            completed = _run_reference_process(command, env=env, cwd=str(workspace.root),
+                                               timeout=timeout_seconds)
         except subprocess.TimeoutExpired as exc:
             raise BackendError(
                 f"reference run on {reference_target} timed out after {timeout_seconds}s"
@@ -401,6 +406,45 @@ def _reference_output(workspace: Workspace, manifest: Manifest, data: bytes,
                 f"{payload.get('error', 'unknown error')}"
             )
         return Path(payload["output_path"]).read_bytes(), run_id
+
+
+def _run_reference_process(command: list[str], *, env: dict[str, str], cwd: str,
+                           timeout: float | None) -> subprocess.CompletedProcess:
+    """subprocess.run for the reference run, except in how it stops one that is cut short.
+
+    On an interrupt or a time-out subprocess.run SIGKILLs the child at once. The reference run
+    is asked to cancel instead (see _stop_reference_run); TimeoutExpired is raised as before.
+    """
+    process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                               text=True, env=env, cwd=cwd)
+    try:
+        stdout, stderr = process.communicate(timeout=timeout)
+    except BaseException:
+        _stop_reference_run(process)
+        raise
+    return subprocess.CompletedProcess(command, process.returncode, stdout, stderr)
+
+
+def _stop_reference_run(process: subprocess.Popen) -> None:
+    """Ask a reference run to cancel, and kill it only if it does not.
+
+    The reference run starts its build tools in their own session (isc/backends/xrt.py), so it
+    is the only process that can end them. SIGTERM is a cancel to `isc` (isc/cli.py): the child
+    ends its tools and records itself as cancelled. A SIGKILL straight away -- what
+    subprocess.run does on an interrupt or a time-out -- leaves v++ and Vivado building with
+    nobody waiting for them. A second interrupt while waiting skips the grace period.
+    """
+    try:
+        if process.poll() is None:
+            process.send_signal(signal.SIGTERM)
+            try:
+                process.communicate(timeout=REFERENCE_STOP_GRACE_S)
+            except subprocess.TimeoutExpired:
+                pass
+    finally:
+        if process.poll() is None:
+            process.kill()
+        process.wait()
 
 
 def _owner(run_id: str) -> Owner:
